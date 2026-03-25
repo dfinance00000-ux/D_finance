@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import API from '../../api/axios'; // Professional API instance
+import API from '../../api/axios'; 
 
 const EMIPayments = () => {
   const [loans, setLoans] = useState([]);
@@ -12,14 +12,13 @@ const EMIPayments = () => {
     if (!user.id && !user._id) return;
     
     try {
-      // Atlas API Calls
+      // Backend endpoints se data sync
       const [loanRes, payRes] = await Promise.all([
         API.get(`/loans?customerId=${user.id || user._id}`),
         API.get(`/payments?customerId=${user.id || user._id}`)
       ]);
       
-      // Filter only Active or Overdue loans
-      const activeLoans = loanRes.data.filter(l => l.status === 'Approved' || l.status === 'Overdue');
+      const activeLoans = loanRes.data.filter(l => l.status === 'Approved' || l.status === 'Disbursed');
       setLoans(activeLoans);
       setPayments(payRes.data.reverse());
     } catch (err) {
@@ -33,14 +32,14 @@ const EMIPayments = () => {
     fetchData();
   }, [fetchData]);
 
-  // Logic to calculate Weekly Due and Overdue Penalty
+  // Logic to calculate Weekly Due (Mathura Model)
   const getWeeklyBillingInfo = (loan) => {
     const nextDue = new Date(loan.nextEmiDate || Date.now());
     const today = new Date();
     
-    // Check if paid for the current week
-    const isPaidThisWeek = payments.some(p => {
-      const pDate = new Date(p.date);
+    // Check if paid for the current week from repaymentHistory or payments
+    const isPaidThisWeek = loan.totalPaid >= loan.amount || payments.some(p => {
+      const pDate = new Date(p.paymentDate);
       const startOfWeek = new Date(nextDue);
       startOfWeek.setDate(startOfWeek.getDate() - 7);
       return p.loanId === loan.loanId && pDate >= startOfWeek && pDate <= nextDue;
@@ -48,74 +47,72 @@ const EMIPayments = () => {
 
     let fine = 0;
     let isOverdue = today > nextDue && !isPaidThisWeek;
-    if (isOverdue) fine = 200; // Fixed Weekly Late Fee for Mathura Model
+    if (isOverdue) fine = loan.lateFee || 200; 
 
     return { nextDue, isOverdue, fine, isPaidThisWeek };
   };
 
-  const handleRazorpayPayment = async (loan, isFullSettlement) => {
-    const { fine } = getWeeklyBillingInfo(loan);
-    const amountToPay = isFullSettlement ? loan.amount : (Number(loan.weeklyEMI) + fine);
-
+  const handleRazorpayPayment = async (loan) => {
     try {
-      // 1. Backend se Razorpay Order ID lena
-      const orderRes = await API.post('/loans/create-order', { amount: amountToPay });
-      const { orderId } = orderRes.data;
+      // 1. Backend se Dynamic EMI Order ID lena
+      const orderRes = await API.post('/payments/create-emi-order', { 
+        loanId: loan.loanId 
+      });
+      
+      const { orderId, amount, key } = orderRes.data;
 
       // 2. Razorpay Window Options
       const options = {
-        key: process.env.REACT_APP_RAZORPAY_KEY_ID, 
-        amount: amountToPay * 100, // Paise
+        key: key, // Live Key from Backend
+        amount: amount * 100, 
         currency: "INR",
         name: "D-FINANCE",
-        description: isFullSettlement ? "Full Loan Settlement" : "Weekly EMI Payment",
+        description: `EMI Payment for Loan #${loan.loanId}`,
         order_id: orderId,
         handler: async (response) => {
-          // 3. Success: Update Atlas Database
-          const paymentPayload = {
-            loanId: loan.loanId,
-            customerId: user.id || user._id,
-            customerName: user.fullName,
-            amount: amountToPay,
-            lateFee: fine,
-            razorpay_payment_id: response.razorpay_payment_id,
-            date: new Date().toISOString(),
-            status: "Success",
-            type: isFullSettlement ? "Full Settlement" : "Weekly EMI"
-          };
+          // 3. Success: Verify Signature on Backend
+          try {
+            const verifyRes = await API.post('/payments/verify', {
+              razorpay_order_id: response.razorpay_order_id,
+              razorpay_payment_id: response.razorpay_payment_id,
+              razorpay_signature: response.razorpay_signature,
+              loanId: loan.loanId
+            });
 
-          await API.post('/payments', paymentPayload);
-          
-          if (isFullSettlement) {
-            await API.patch(`/loans/${loan._id}`, { status: 'Closed' });
+            if (verifyRes.data.success) {
+              alert("Payment Verified & Recorded! EMI Status Updated.");
+              fetchData(); // Refresh UI
+            }
+          } catch (err) {
+            alert("Payment Success but Verification Failed. Contact Branch.");
           }
-
-          alert("Payment Successful! Database Updated.");
-          fetchData();
         },
-        prefill: { name: user.fullName, contact: user.mobile },
-        theme: { color: "#0f172a" }
+        prefill: { 
+            name: user.fullName, 
+            contact: user.mobile || "" 
+        },
+        theme: { color: "#2563eb" }
       };
 
       const rzp = new window.Razorpay(options);
       rzp.open();
     } catch (err) {
-      alert("Payment Gateway Error. Please try again.");
+      alert(err.response?.data?.error || "Payment Gateway Error.");
     }
   };
 
   return (
-    <div style={{ padding: '20px' }}>
+    <div style={{ padding: '20px', maxWidth: '1200px', margin: '0 auto' }}>
       <div style={headerSection}>
         <h2 style={{ color: '#0f172a', margin: 0, fontWeight: '900' }}>💳 Weekly Repayment Portal</h2>
-        <p style={{ color: '#64748b', fontSize: '13px' }}>Manage your weekly installments and clear dues via Razorpay.</p>
+        <p style={{ color: '#64748b', fontSize: '13px' }}>Pay your installments securely via Razorpay Live.</p>
       </div>
 
       {loading ? (
         <div style={noDataBox}>🔄 Syncing with Atlas Cloud...</div>
       ) : loans.length === 0 ? (
         <div style={noDataBox}>
-          <h3>No Active Installments</h3>
+          <h3>No Active Loans Found</h3>
           <p>Approved loans will appear here for weekly repayment.</p>
         </div>
       ) : (
@@ -123,39 +120,43 @@ const EMIPayments = () => {
           {loans.map(loan => {
             const { nextDue, isOverdue, fine, isPaidThisWeek } = getWeeklyBillingInfo(loan);
             return (
-              <div key={loan._id} style={{...paymentCard, borderTop: isOverdue ? '6px solid #ef4444' : '6px solid #059669'}}>
+              <div key={loan._id} style={{...paymentCard, borderTop: isOverdue ? '6px solid #ef4444' : '6px solid #2563eb'}}>
                 <div style={cardHeader}>
-                  <span style={idTag}>LOAN ID: #{loan.loanId}</span>
-                  {isOverdue && <span style={overdueBadge}>⚠️ OVERDUE</span>}
-                  {isPaidThisWeek && <span style={paidBadge}>✅ WEEKLY DUE CLEAR</span>}
+                  <span style={idTag}>LOAN ID: {loan.loanId}</span>
+                  {isOverdue ? (
+                    <span style={overdueBadge}>⚠️ OVERDUE</span>
+                  ) : isPaidThisWeek ? (
+                    <span style={paidBadge}>✅ PAID</span>
+                  ) : (
+                    <span style={pendingBadge}>⏳ DUE</span>
+                  )}
                 </div>
                 
                 <div style={billingCycleBox}>
                   <div style={cycleItem}>
-                    <label style={miniLabel}>Weekly EMI</label>
-                    <p style={cycleVal}>₹{loan.weeklyEMI}</p>
+                    <label style={miniLabel}>EMI Amount</label>
+                    <p style={cycleVal}>₹{loan.emiAmount}</p>
                   </div>
                   <div style={{...cycleItem, borderLeft: '1px solid #e2e8f0', paddingLeft: '15px'}}>
-                    <label style={miniLabel}>Next Due Date</label>
-                    <p style={cycleVal}>{nextDue.toLocaleDateString()}</p>
+                    <label style={miniLabel}>Due Date</label>
+                    <p style={cycleVal}>{new Date(nextDue).toLocaleDateString()}</p>
                   </div>
                 </div>
 
                 {isOverdue && (
                   <div style={fineAlert}>
-                    <strong>Late Fee Applied:</strong> ₹{fine} added due to delayed weekly payment.
+                    <strong>Late Fee:</strong> ₹{fine} added.
                   </div>
                 )}
 
                 <div style={actionRow}>
                   <button 
                     disabled={isPaidThisWeek}
-                    onClick={() => handleRazorpayPayment(loan, false)} 
+                    onClick={() => handleRazorpayPayment(loan)} 
                     style={isPaidThisWeek ? disabledBtn : payBtn}
                   >
-                    {isPaidThisWeek ? "Weekly Paid" : `Pay Week EMI (₹${(Number(loan.weeklyEMI) + fine)})`}
+                    {isPaidThisWeek ? "Installment Paid" : `Pay Installment (₹${loan.emiAmount + (isOverdue ? fine : 0)})`}
                   </button>
-                  <button onClick={() => handleRazorpayPayment(loan, true)} style={settleBtn}>Close Loan</button>
                 </div>
               </div>
             );
@@ -163,29 +164,33 @@ const EMIPayments = () => {
         </div>
       )}
 
-      {/* --- PAYMENT HISTORY TABLE --- */}
+      {/* TRANSACTION HISTORY */}
       <div style={historySection}>
-        <h3 style={{fontWeight: '800', marginBottom: '20px'}}>Transaction History</h3>
-        <table style={tableStyle}>
-          <thead>
-            <tr style={tableHeader}>
-              <th>DATE</th>
-              <th>TYPE</th>
-              <th>AMOUNT</th>
-              <th>STATUS</th>
-            </tr>
-          </thead>
-          <tbody>
-            {payments.slice(0, 10).map(p => (
-              <tr key={p._id} style={tableRow}>
-                <td style={{padding: '12px 0'}}>{new Date(p.date).toLocaleDateString()}</td>
-                <td>{p.type}</td>
-                <td style={{fontWeight: 'bold'}}>₹{p.amount}</td>
-                <td><span style={{color: '#059669', fontWeight: 'bold'}}>● {p.status}</span></td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+        <h3 style={{fontWeight: '800', marginBottom: '20px'}}>Recent Payments</h3>
+        <div style={{ overflowX: 'auto' }}>
+            <table style={tableStyle}>
+            <thead>
+                <tr style={tableHeader}>
+                <th>DATE</th>
+                <th>RECEIPT</th>
+                <th>AMOUNT</th>
+                <th>STATUS</th>
+                </tr>
+            </thead>
+            <tbody>
+                {payments.length > 0 ? payments.slice(0, 5).map(p => (
+                <tr key={p._id} style={tableRow}>
+                    <td style={{padding: '12px 0'}}>{new Date(p.paymentDate || p.date).toLocaleDateString()}</td>
+                    <td>{p.receiptId || p.razorpay_payment_id?.slice(-8)}</td>
+                    <td style={{fontWeight: 'bold'}}>₹{p.amount}</td>
+                    <td><span style={{color: '#059669', fontWeight: 'bold'}}>● {p.status}</span></td>
+                </tr>
+                )) : (
+                    <tr><td colSpan="4" style={{textAlign:'center', padding:'20px', color:'#94a3b8'}}>No history found</td></tr>
+                )}
+            </tbody>
+            </table>
+        </div>
       </div>
     </div>
   );
@@ -193,25 +198,25 @@ const EMIPayments = () => {
 
 // --- Styles Update ---
 const headerSection = { marginBottom: '30px', borderBottom: '1px solid #f1f5f9', paddingBottom: '15px' };
-const gridContainer = { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(350px, 1fr))', gap: '20px' };
+const gridContainer = { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '20px' };
 const paymentCard = { background: '#fff', padding: '25px', borderRadius: '24px', boxShadow: '0 10px 25px rgba(0,0,0,0.03)', border: '1px solid #f1f5f9' };
 const cardHeader = { display: 'flex', justifyContent: 'space-between', marginBottom: '20px', alignItems: 'center' };
 const billingCycleBox = { display: 'flex', background: '#f8fafc', padding: '15px', borderRadius: '15px', marginBottom: '20px' };
 const cycleItem = { flex: 1 };
 const miniLabel = { fontSize: '9px', fontWeight: '900', color: '#94a3b8', textTransform: 'uppercase' };
-const cycleVal = { fontSize: '15px', fontWeight: '800', color: '#1e293b', margin: '4px 0' };
-const fineAlert = { background: '#fef2f2', border: '1px solid #fee2e2', color: '#991b1b', padding: '12px', borderRadius: '12px', fontSize: '11px', marginBottom: '20px' };
-const overdueBadge = { background: '#fee2e2', color: '#b91c1c', padding: '5px 10px', borderRadius: '8px', fontSize: '10px', fontWeight: '900' };
-const paidBadge = { background: '#dcfce7', color: '#166534', padding: '5px 10px', borderRadius: '8px', fontSize: '10px', fontWeight: '900' };
+const cycleVal = { fontSize: '18px', fontWeight: '800', color: '#1e293b', margin: '4px 0' };
+const fineAlert = { background: '#fef2f2', color: '#991b1b', padding: '10px', borderRadius: '12px', fontSize: '12px', marginBottom: '20px', textAlign: 'center' };
+const overdueBadge = { background: '#fee2e2', color: '#b91c1c', padding: '5px 12px', borderRadius: '20px', fontSize: '10px', fontWeight: '900' };
+const paidBadge = { background: '#dcfce7', color: '#166534', padding: '5px 12px', borderRadius: '20px', fontSize: '10px', fontWeight: '900' };
+const pendingBadge = { background: '#fef9c3', color: '#854d0e', padding: '5px 12px', borderRadius: '20px', fontSize: '10px', fontWeight: '900' };
 const idTag = { fontSize: '11px', color: '#94a3b8', fontWeight: '900' };
 const actionRow = { display: 'flex', gap: '10px' };
-const payBtn = { flex: 2, padding: '14px', background: '#0f172a', color: '#fff', border: 'none', borderRadius: '12px', fontWeight: '800', cursor: 'pointer' };
+const payBtn = { flex: 1, padding: '16px', background: '#2563eb', color: '#fff', border: 'none', borderRadius: '12px', fontWeight: '800', cursor: 'pointer', transition: '0.3s' };
 const disabledBtn = { ...payBtn, background: '#f1f5f9', color: '#94a3b8', cursor: 'not-allowed' };
-const settleBtn = { flex: 1, padding: '14px', background: '#fff', color: '#1e293b', border: '1.5px solid #e2e8f0', borderRadius: '12px', fontWeight: '800', cursor: 'pointer' };
 const historySection = { marginTop: '50px', background: '#fff', padding: '30px', borderRadius: '24px', boxShadow: '0 4px 15px rgba(0,0,0,0.02)' };
 const tableStyle = { width: '100%', borderCollapse: 'collapse' };
 const tableHeader = { textAlign: 'left', color: '#94a3b8', fontSize: '10px', fontWeight: '900', borderBottom: '1px solid #f1f5f9', paddingBottom: '10px' };
 const tableRow = { borderBottom: '1px solid #f8fafc', fontSize: '13px' };
-const noDataBox = { gridColumn: '1/-1', textAlign: 'center', padding: '80px', background: '#f8fafc', borderRadius: '24px', border: '2px dashed #e2e8f0', color: '#94a3b8' };
+const noDataBox = { gridColumn: '1/-1', textAlign: 'center', padding: '60px', background: '#f8fafc', borderRadius: '24px', border: '2px dashed #e2e8f0', color: '#94a3b8' };
 
 export default EMIPayments;

@@ -1,9 +1,19 @@
 import React, { useState } from 'react';
+import API from '../../api/axios'; // Aapka updated axios instance
 
 const AdvisorEntry = () => {
   const [advisor, setAdvisor] = useState({
-    name: '', mobile: '', sponsorId: '', rank: 'Trainee', branch: 'Main Branch'
+    fullName: '', 
+    email: '',
+    mobile: '', 
+    sponsorId: '', 
+    rank: 'Trainee', 
+    branch: 'Main Branch',
+    password: '123456' // Default password for new advisors
   });
+
+  const [loading, setLoading] = useState(false);
+  const [message, setMessage] = useState({ type: '', text: '' });
 
   const inputStyle = {
     width: '100%', padding: '10px', borderRadius: '6px', border: '1px solid #ddd', marginTop: '5px'
@@ -13,6 +23,28 @@ const AdvisorEntry = () => {
     background: '#fff', padding: '25px', borderRadius: '12px', boxShadow: '0 4px 15px rgba(0,0,0,0.05)'
   };
 
+  // --- SAVE ADVISOR LOGIC ---
+  const handleSave = async (e) => {
+    e.preventDefault();
+    setLoading(true);
+    setMessage({ type: '', text: '' });
+
+    try {
+      // Backend ko request bhej rahe hain (Role: User/Advisor)
+      const res = await API.post('/auth/signup', {
+        ...advisor,
+        role: 'User' // Advisor ko hum 'User' role de rahe hain default
+      });
+
+      setMessage({ type: 'success', text: `Success! Advisor Code: ${advisor.sponsorId || 'Generated'}` });
+      alert("Advisor Registered Successfully!");
+    } catch (err) {
+      setMessage({ type: 'error', text: err || "Registration Failed" });
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <div style={{ padding: '20px' }}>
       <div style={cardStyle}>
@@ -20,16 +52,32 @@ const AdvisorEntry = () => {
           🤝 Advisor/Agent Registration
         </h2>
 
-        <form style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '20px' }}>
+        {message.text && (
+          <div style={{ 
+            padding: '10px', marginBottom: '20px', borderRadius: '6px',
+            backgroundColor: message.type === 'success' ? '#dcfce7' : '#fee2e2',
+            color: message.type === 'success' ? '#166534' : '#991b1b'
+          }}>
+            {message.text}
+          </div>
+        )}
+
+        <form onSubmit={handleSave} style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '20px' }}>
           <div>
-            <label style={{ fontSize: '13px', fontWeight: 'bold' }}>Advisor Name *</label>
-            <input type="text" placeholder="Full Name" style={inputStyle} 
-              onChange={(e) => setAdvisor({...advisor, name: e.target.value})} />
+            <label style={{ fontSize: '13px', fontWeight: 'bold' }}>Full Name *</label>
+            <input type="text" required placeholder="Full Name" style={inputStyle} 
+              onChange={(e) => setAdvisor({...advisor, fullName: e.target.value})} />
+          </div>
+
+          <div>
+            <label style={{ fontSize: '13px', fontWeight: 'bold' }}>Email Address *</label>
+            <input type="email" required placeholder="Email for Login" style={inputStyle} 
+              onChange={(e) => setAdvisor({...advisor, email: e.target.value})} />
           </div>
 
           <div>
             <label style={{ fontSize: '13px', fontWeight: 'bold' }}>Mobile Number *</label>
-            <input type="number" placeholder="10-digit mobile" style={inputStyle} 
+            <input type="number" required placeholder="10-digit mobile" style={inputStyle} 
               onChange={(e) => setAdvisor({...advisor, mobile: e.target.value})} />
           </div>
 
@@ -41,28 +89,27 @@ const AdvisorEntry = () => {
           </div>
 
           <div>
-            <label style={{ fontSize: '13px', fontWeight: 'bold' }}>Current Rank</label>
+            <label style={{ fontSize: '13px', fontWeight: 'bold' }}>Rank</label>
             <select style={inputStyle} value={advisor.rank} onChange={(e) => setAdvisor({...advisor, rank: e.target.value})}>
               <option>Trainee</option>
               <option>Advisor</option>
               <option>Senior Advisor</option>
-              <option>Team Leader</option>
               <option>Manager</option>
             </select>
           </div>
 
           <div style={{ gridColumn: '1 / -1' }}>
-            <button type="button" style={{ 
-              width: '100%', padding: '15px', background: '#4f46e5', color: '#fff', 
-              border: 'none', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer', marginTop: '10px' 
+            <button type="submit" disabled={loading} style={{ 
+              width: '100%', padding: '15px', background: loading ? '#94a3b8' : '#4f46e5', 
+              color: '#fff', border: 'none', borderRadius: '8px', fontWeight: 'bold', 
+              cursor: loading ? 'not-allowed' : 'pointer', marginTop: '10px' 
             }}>
-              Generate Advisor Code & Save
+              {loading ? 'Registering...' : 'Register Advisor & Generate ID'}
             </button>
           </div>
         </form>
       </div>
 
-      {/* Info Section for Commission */}
       <div style={{ marginTop: '25px', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
         <div style={{ ...cardStyle, borderLeft: '4px solid #10b981' }}>
           <h4 style={{ margin: '0 0 10px 0', color: '#065f46' }}>Current Commission Slab</h4>

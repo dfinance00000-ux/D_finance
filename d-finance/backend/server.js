@@ -6,46 +6,27 @@ const mongoose = require('mongoose');
 const jwt = require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
 const Razorpay = require('razorpay');
+const axios = require('axios');
+const crypto = require('crypto');
 
-// Database Connect
+// Models Import
+const User = require('./models/User'); 
+const Loan = require('./models/Loan'); 
+const Payment = require('./models/Payment');
+
 connectDB();
-
 const app = express();
-app.use(cors());
+
+app.use(cors({ origin: "*", credentials: true })); 
 app.use(express.json());
 
 // --- 1. RAZORPAY CONFIG ---
 const razorpay = new Razorpay({
-  key_id: process.env.RAZORPAY_KEY_ID || "rzp_test_dummy",
-  key_secret: process.env.RAZORPAY_KEY_SECRET || "dummy_secret",
+  key_id: process.env.RAZORPAY_KEY_ID,
+  key_secret: process.env.RAZORPAY_KEY_SECRET,
 });
 
-// --- 2. MONGODB MODELS ---
-const User = mongoose.models.User || mongoose.model('User', new mongoose.Schema({
-  fullName: { type: String, required: true },
-  email: { type: String, unique: true, required: true },
-  password: { type: String, required: true },
-  mobile: String,
-  adhaar: String,      // Frontend Step 1 field
-  pan: String,         // Frontend Step 1 field
-  sponsorId: String,   // Frontend Step 2 field
-  cibilScore: Number,  // Frontend Step 1 field
-  role: { type: String, enum: ['Admin', 'User', 'Accountant', 'Customer'], default: 'Customer' },
-  createdAt: { type: Date, default: Date.now }
-}));
-
-const Loan = mongoose.models.Loan || mongoose.model('Loan', new mongoose.Schema({
-  loanId: { type: String, unique: true },
-  customerId: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
-  customerName: String,
-  amount: Number,
-  weeklyEMI: Number,
-  status: { type: String, default: 'Verification Pending' },
-  nextEmiDate: Date,
-  repaymentSchedule: Array
-}));
-
-// --- 3. MIDDLEWARE ---
+// --- 2. AUTH MIDDLEWARE ---
 const verifyToken = (req, res, next) => {
   const token = req.headers['authorization']?.split(' ')[1];
   if (!token) return res.status(403).json({ error: "Access Denied" });
@@ -56,106 +37,168 @@ const verifyToken = (req, res, next) => {
   } catch (err) { res.status(401).json({ error: "Invalid Token" }); }
 };
 
-// --- 4. AUTH ROUTES ---
+// --- 3. ADMIN ANALYTICS & SEARCH ---
 
-// Naya Route: Advisor Check (Frontend Step 2 ke liye)
-app.get('/api/auth/check-advisor/:id', async (req, res) => {
+app.get('/api/admin/stats', verifyToken, async (req, res) => {
+  if (req.user.role !== 'Admin') return res.status(403).json({ error: "Unauthorized" });
   try {
-    // Mathura Launch ke liye "ADMIN001" ko default valid sponsor maana hai
-    const sponsorId = req.params.id;
-    const advisor = await User.findOne({ sponsorId: sponsorId });
-    
-    if (sponsorId === "ADMIN001" || advisor) {
-      return res.json({ exists: true });
-    }
-    res.json({ exists: false });
-  } catch (err) {
-    res.status(500).json({ error: "Sponsor verification failed" });
-  }
+    const totalLoans = await Loan.aggregate([{ $group: { _id: null, total: { $sum: "$amount" } } }]);
+    const totalRecovery = await Payment.aggregate([{ $match: { status: 'Success' } }, { $group: { _id: null, total: { $sum: "$amount" } } }]);
+    const activeCustomers = await User.countDocuments({ role: 'Customer' });
+    res.json({
+      totalDisbursed: totalLoans[0]?.total || 0,
+      totalRecovered: totalRecovery[0]?.total || 0,
+      customerCount: activeCustomers
+    });
+  } catch (err) { res.status(500).json({ error: "Stats Fetch Failed" }); }
 });
 
-// Signup (Updated with new fields)
+app.get('/api/admin/search', verifyToken, async (req, res) => {
+  if (req.user.role !== 'Admin') return res.status(403).json({ error: "Unauthorized" });
+  const { q } = req.query;
+  try {
+    const customers = await User.find({
+      role: 'Customer',
+      $or: [{ fullName: { $regex: q, $options: 'i' } }, { mobile: { $regex: q, $options: 'i' } }]
+    }).limit(5);
+    const loans = await Loan.find({
+      $or: [{ loanId: { $regex: q, $options: 'i' } }, { customerName: { $regex: q, $options: 'i' } }]
+    }).limit(5);
+    res.json({ customers, loans });
+  } catch (err) { res.status(500).json({ error: "Search Failed" }); }
+});
+
+app.get('/api/admin/all-users', verifyToken, async (req, res) => {
+  if (req.user.role !== 'Admin') return res.status(403).json({ error: "Unauthorized" });
+  try {
+    const users = await User.find({}, '-password');
+    res.json(users);
+  } catch (err) { res.status(500).json({ error: "Users Fetch Failed" }); }
+});
+
+app.get('/api/admin/collection-report', verifyToken, async (req, res) => {
+  if (req.user.role !== 'Admin') return res.status(403).json({ error: "Unauthorized" });
+  try {
+    const startOfDay = new Date();
+    startOfDay.setHours(0, 0, 0, 0);
+    const dailyPayments = await Payment.find({ status: 'Success', paymentDate: { $gte: startOfDay } }).sort({ paymentDate: -1 });
+    res.json(dailyPayments);
+  } catch (err) { res.status(500).json({ error: "Collection Report Failed" }); }
+});
+
+// --- 4. DYNAMIC EMI PAYMENT ROUTES ---
+
+app.post('/api/payments/create-emi-order', verifyToken, async (req, res) => {
+  try {
+    const { loanId } = req.body;
+    const loan = await Loan.findOne({ loanId });
+    if (!loan) return res.status(404).json({ error: "Loan not found" });
+    const options = {
+      amount: Math.round(loan.emiAmount * 100), 
+      currency: "INR",
+      receipt: `rcpt_${loanId}_${Date.now()}`,
+    };
+    const order = await razorpay.orders.create(options);
+    res.json({ orderId: order.id, amount: loan.emiAmount, key: process.env.RAZORPAY_KEY_ID });
+  } catch (err) { res.status(500).json({ error: "Order Failed" }); }
+});
+
+app.post('/api/payments/verify', verifyToken, async (req, res) => {
+  try {
+    const { razorpay_order_id, razorpay_payment_id, razorpay_signature, loanId } = req.body;
+    const sign = razorpay_order_id + "|" + razorpay_payment_id;
+    const expectedSign = crypto.createHmac("sha256", process.env.RAZORPAY_KEY_SECRET).update(sign.toString()).digest("hex");
+
+    if (razorpay_signature !== expectedSign) return res.status(400).json({ error: "Invalid Signature" });
+
+    const loan = await Loan.findOne({ loanId });
+    loan.totalPaid += loan.emiAmount;
+    
+    // Auto-Closure Logic
+    if (loan.totalPaid >= loan.amount) {
+        loan.status = 'Closed';
+    }
+
+    loan.repaymentHistory.push({ paymentId: razorpay_payment_id, orderId: razorpay_order_id, amount: loan.emiAmount });
+    await loan.save();
+
+    const newPayment = new Payment({
+      receiptId: `RCPT-${Math.floor(100000 + Math.random() * 900000)}`,
+      loanId: loan.loanId, customerId: req.user.id, customerName: loan.customerName,
+      amount: loan.emiAmount, razorpay_order_id, razorpay_payment_id, status: 'Success', method: 'Online'
+    });
+    await newPayment.save();
+
+    res.json({ success: true, message: "Payment Recorded!", loanStatus: loan.status });
+  } catch (err) { res.status(500).json({ error: "Verification Error" }); }
+});
+
+// --- 5. KYC & LOAN ROUTES ---
+
+app.post('/api/kyc/aadhaar-otp', async (req, res) => {
+  try {
+    const { adhaarNumber } = req.body;
+    const response = await axios.post('https://api.sandbox.co.in/kyc/aadhaar/okyc/otp/request', 
+      { "@entity": "AadhaarOTPRequest", "aadhaar_number": adhaarNumber },
+      { headers: { 'x-api-key': process.env.SANDBOX_API_KEY, 'x-api-secret': process.env.SANDBOX_SECRET, 'x-api-version': '1.0' }}
+    );
+    res.json({ success: true, ref_id: response.data.data.reference_id });
+  } catch (err) { res.status(500).json({ error: "KYC Service Down" }); }
+});
+
+app.post('/api/kyc/aadhaar-verify', async (req, res) => {
+  try {
+    const { otp, ref_id } = req.body;
+    const response = await axios.post('https://api.sandbox.co.in/kyc/aadhaar/okyc/otp/verify', 
+      { "@entity": "AadhaarOTPVerify", "otp": otp, "reference_id": ref_id },
+      { headers: { 'x-api-key': process.env.SANDBOX_API_KEY, 'x-api-secret': process.env.SANDBOX_SECRET, 'x-api-version': '1.0' }}
+    );
+    res.json({ success: true, customerData: response.data.data });
+  } catch (err) { res.status(500).json({ error: "Verification Failed" }); }
+});
+
+app.get('/api/admin/all-loans', verifyToken, async (req, res) => {
+  if (req.user.role !== 'Admin') return res.status(403).json({ error: "Unauthorized" });
+  try {
+    const loans = await Loan.find().sort({ createdAt: -1 });
+    res.json(loans);
+  } catch (err) { res.status(500).json({ error: "Fetch Failed" }); }
+});
+
+app.put('/api/admin/approve-loan/:id', verifyToken, async (req, res) => {
+  if (req.user.role !== 'Admin') return res.status(403).json({ error: "Unauthorized" });
+  try {
+    const loan = await Loan.findByIdAndUpdate(req.params.id, { 
+      status: 'Approved', approvedBy: req.user.id, approvalDate: new Date() 
+    }, { new: true });
+    res.json({ message: "Loan Approved!", loan });
+  } catch (err) { res.status(500).json({ error: "Approval Error" }); }
+});
+
+// --- 6. AUTH ROUTES ---
+
 app.post('/api/auth/signup', async (req, res) => {
   try {
-    const { email, password } = req.body;
-    const existingUser = await User.findOne({ email });
-    if (existingUser) return res.status(400).json({ error: "Email already exists" });
-
+    const { email, mobile, password } = req.body;
+    const cleanEmail = email.toLowerCase().trim();
     const salt = await bcrypt.genSalt(10);
     const hashedPassword = await bcrypt.hash(password, salt);
-    
-    const newUser = new User({ ...req.body, password: hashedPassword });
+    const newUser = new User({ ...req.body, email: cleanEmail, password: hashedPassword });
     await newUser.save();
-    res.status(201).json({ message: "User Registered Successfully!" });
-  } catch (err) { 
-    res.status(400).json({ error: "Signup Failed: " + err.message }); 
-  }
-});
-
-// Login
-app.post('/api/auth/login', async (req, res) => {
-  try {
-    const { email, password } = req.body;
-    const user = await User.findOne({ email });
-    if (!user || !(await bcrypt.compare(password, user.password))) {
-      return res.status(401).json({ error: "Invalid Credentials" });
-    }
-    const token = jwt.sign({ id: user._id, role: user.role }, process.env.JWT_SECRET, { expiresIn: '1d' });
-    res.json({ token, user: { id: user._id, fullName: user.fullName, role: user.role, cibil: user.cibilScore } });
-  } catch (err) { res.status(500).json({ error: "Login Error" }); }
-});
-
-// --- 5. LOAN & PAYMENT ROUTES ---
-
-app.post('/api/loans/apply', verifyToken, async (req, res) => {
-  try {
-    const newLoan = new Loan({ ...req.body, customerId: req.user.id });
-    await newLoan.save();
-    res.status(201).json(newLoan);
+    res.status(201).json({ message: "Success" });
   } catch (err) { res.status(400).json({ error: err.message }); }
 });
 
-// --- Get Loans for a specific customer ---
-app.get('/api/loans', verifyToken, async (req, res) => {
+app.post('/api/auth/login', async (req, res) => {
   try {
-    const { customerId } = req.query;
-    // Security check: Customer sirf apna data dekh sake
-    if (req.user.role === 'Customer' && req.user.id !== customerId) {
-      return res.status(403).json({ error: "Unauthorized access to data" });
-    }
-    const loans = await Loan.find({ customerId }).sort({ createdAt: -1 });
-    res.json(loans);
-  } catch (err) {
-    res.status(500).json({ error: "Failed to fetch loans" });
-  }
+    const { mobile, password } = req.body;
+    const user = await User.findOne({ mobile });
+    if (!user || !(await bcrypt.compare(password, user.password))) return res.status(401).json({ error: "Invalid Login" });
+    const token = jwt.sign({ id: user._id, role: user.role }, process.env.JWT_SECRET, { expiresIn: '1d' });
+    res.json({ token, user: { id: user._id, fullName: user.fullName, role: user.role } });
+  } catch (err) { res.status(500).json({ error: "Login Error" }); }
 });
 
-// --- Get Payments for a specific customer ---
-app.get('/api/payments', verifyToken, async (req, res) => {
-  try {
-    const { customerId } = req.query;
-    const payments = await Payment.find({ customerId }).sort({ date: -1 });
-    res.json(payments);
-  } catch (err) {
-    res.status(500).json({ error: "Failed to fetch payments" });
-  }
-});
-// Razorpay Order
-app.post('/api/payments/create-order', verifyToken, async (req, res) => {
-  try {
-    const options = {
-      amount: Math.round(req.body.amount * 100), 
-      currency: "INR",
-      receipt: `rcpt_${Date.now()}`
-    };
-    const order = await razorpay.orders.create(options);
-    res.json({ orderId: order.id, amount: options.amount });
-  } catch (err) { res.status(500).json({ error: "Razorpay Failed" }); }
-});
-
-// --- 6. START SERVER ---
-const PORT = process.env.PORT || 5000;
-app.listen(PORT, () => {
-  console.log(`🚀 D-Finance Engine Running on Port ${PORT}`);
-  console.log(`📡 Advisor Check API: http://localhost:${PORT}/api/auth/check-advisor/ADMIN001`);
-});
+// Start Server
+const PORT = process.env.PORT || 10000;
+app.listen(PORT, () => console.log(`🚀 D-Finance Engine Running on Port ${PORT}`));

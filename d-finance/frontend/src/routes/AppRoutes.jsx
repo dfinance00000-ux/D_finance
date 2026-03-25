@@ -24,6 +24,12 @@ import CollectionEntry from '../pages/Collection/CollectionEntry';
 import BulkDataRetrieval from '../pages/Admin/BulkDataRetrieval'; 
 import ManageBlogs from '../pages/Admin/ManageBlogs'; 
 
+// --- NAYE ADMIN PAGES (Fintech Core) ---
+import AdminStatsDashboard from '../pages/Admin/AdminStatsDashboard';
+import AdminApproval from '../pages/Admin/AdminApproval';
+import AdvisorPerformance from '../pages/Admin/AdvisorPerformance';
+import DailyCollectionReport from '../pages/Admin/DailyCollectionReport'; // Naya Page
+
 // User (Advisor) Pages
 import UserDashboard from '../pages/User/UserDashboard';
 import AdvisorVerification from '../pages/Advisor/AdvisorVerification'; 
@@ -40,16 +46,23 @@ import EMIPayments from "../pages/Customer/EMIPayments";
 const AppRoutes = () => {
   return (
     <Routes>
-      {/* 1. Website Home (Landing Page) */}
+      {/* 1. Website Home */}
       <Route path="/" element={<LandingPage />} />
 
       {/* 2. Auth Routes */}
       <Route path="/login" element={<Login />} />
       <Route path="/signup" element={<Signup />} />
 
-      {/* 3. Admin Routes */}
+      {/* 3. Admin Routes (Mathura Branch Control) */}
       <Route path="/admin" element={<AdminLayout />}>
-        <Route index element={<Dashboard />} />
+        {/* Analytics & Core Management */}
+        <Route index element={<AdminStatsDashboard />} /> 
+        <Route path="analytics" element={<AdminStatsDashboard />} />
+        <Route path="approvals" element={<AdminApproval />} />
+        <Route path="advisor-performance" element={<AdvisorPerformance />} />
+        <Route path="daily-collection" element={<DailyCollectionReport />} />
+        
+        {/* Operation Routes */}
         <Route path="master/branch" element={<BranchMaster />} />
         <Route path="customer/entry" element={<CustomerEntry />} />
         <Route path="loan" element={<LoanMaster />} />
@@ -63,15 +76,15 @@ const AppRoutes = () => {
       <Route path="/user" element={<UserLayout />}>
         <Route index element={<UserDashboard />} />
         <Route path="field-verification" element={<AdvisorVerification />} /> 
+        <Route path="payouts" element={<AdvisorPerformance />} /> {/* Advisor bhi apna payout dekh sake */}
         <Route path="my-team" element={<div className="p-10 font-bold text-gray-400 text-center">Advisor Tree Section</div>} />
-        <Route path="payouts" element={<div className="p-10 font-bold text-gray-400 text-center">Commission Reports</div>} />
       </Route>
 
       {/* 5. Accountant Routes */}
       <Route path="/accountant" element={<AccountantLayout />}>
         <Route index element={<Navigate to="approval" replace />} />
         <Route path="approval" element={<AccountantApproval />} />
-        <Route path="reports" element={<div className="p-10 font-bold text-gray-400 text-center">Audit & Compliance Logs</div>} />
+        <Route path="collection-logs" element={<DailyCollectionReport />} />
       </Route>
 
       {/* 6. Customer Routes */}
@@ -83,8 +96,19 @@ const AppRoutes = () => {
         <Route path="emi" element={<EMIPayments />} />
       </Route>
 
-      {/* 7. Error 404 Redirect */}
-      <Route path="*" element={<div className="h-screen flex items-center justify-center font-bold text-2xl text-red-500 bg-gray-100">404: Path Not Found</div>} />
+      {/* 7. Error 404 */}
+      <Route path="*" element={
+        <div className="h-screen flex flex-col items-center justify-center font-bold text-2xl text-red-500 bg-gray-100">
+          <h1 className="text-9xl animate-pulse">404</h1>
+          <p className="text-slate-600">D-Finance: Invalid Access Path</p>
+          <button 
+            onClick={() => window.location.href='/login'} 
+            className="mt-8 px-8 py-3 bg-blue-600 text-white text-sm rounded-2xl shadow-xl shadow-blue-500/30 hover:scale-105 transition-all"
+          >
+            Back to Secure Login
+          </button>
+        </div>
+      } />
     </Routes>
   );
 };
