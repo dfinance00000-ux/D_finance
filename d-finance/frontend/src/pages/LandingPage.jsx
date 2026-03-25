@@ -25,7 +25,7 @@ const LandingPage = () => {
       <nav style={navStyle}>
         <div style={logoWrapper}>
           <div style={logoIcon}>D</div>
-          <div style={logoText}>D-FINANCE</div>
+          <div style={logoText}>Aditya-FINANCE</div>
         </div>
         <div style={navLinks}>
           <a href="#features" style={linkStyle}>Infrastructure</a>
