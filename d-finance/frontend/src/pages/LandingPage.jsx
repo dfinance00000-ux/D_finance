@@ -25,7 +25,7 @@ const LandingPage = () => {
       <nav style={navStyle}>
         <div style={logoWrapper}>
           <div style={logoIcon}>D</div>
-          <div style={logoText}>F-FINANCE</div>
+          <div style={logoText}>D-FINANCE</div>
         </div>
         <div style={navLinks}>
           <a href="#features" style={linkStyle}>Infrastructure</a>
@@ -40,7 +40,7 @@ const LandingPage = () => {
       {/* --- HERO SECTION --- */}
       <header style={heroStyle}>
         <div style={badgeStyle}>
-          <span style={dot}></span> SOP 1.3.11 COMPLIANT INFRASTRUCTURE
+          <span style={dot}></span> Aditya pandey COMPLIANT INFRASTRUCTURE
         </div>
         <h1 style={heroTitle}>
           Next-Gen <span style={gradientText}>Digital Lending</span> <br/>
