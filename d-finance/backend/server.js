@@ -199,6 +199,20 @@ app.post('/api/auth/login', async (req, res) => {
   } catch (err) { res.status(500).json({ error: "Login Error" }); }
 });
 
+// server.js mein kahin bhi temporary daal do, ek baar chalne ke baad hata dena
+const createAdmin = async () => {
+    const salt = await bcrypt.genSalt(10);
+    const hashed = await bcrypt.hash("admin123", salt);
+    const admin = new User({
+        fullName: "Aditya Admin",
+        mobile: "9999999999", // Apna number dalo
+        password: hashed,
+        role: "Admin"
+    });
+    await admin.save();
+    console.log("✅ Admin Created!");
+};
+// createAdmin(); // Is line ko uncomment karke ek baar server start karo
 // Start Server
 const PORT = process.env.PORT || 10000;
 app.listen(PORT, () => console.log(`🚀 D-Finance Engine Running on Port ${PORT}`));
