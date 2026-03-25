@@ -2,48 +2,82 @@ const User = require('../models/User');
 const jwt = require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
 
-// SIGNUP LOGIC
+// --- 1. SIGNUP LOGIC ---
 exports.signup = async (req, res) => {
     try {
-        const { fullName, mobile, email, password, sponsorId, role } = req.body;
+        const { fullName, mobile, email, password, sponsorId, role, adhaar, pan } = req.body;
         
-        // Check if user exists
+        // 1. Check if user already exists
         let user = await User.findOne({ mobile });
-        if (user) return res.status(400).json({ message: "User already exists with this mobile" });
+        if (user) {
+            return res.status(400).json({ error: "User already exists with this mobile number" });
+        }
 
-        user = new User({ fullName, mobile, email, password, sponsorId, role });
+        // 2. Password Hashing (Zaroori: Kyunki login mein hum bcrypt use kar rahe hain)
+        const salt = await bcrypt.genSalt(10);
+        const hashedPassword = await bcrypt.hash(password, salt);
+
+        // 3. Create New User with Hashed Password
+        user = new User({ 
+            fullName, 
+            mobile, 
+            email: email.toLowerCase().trim(), 
+            password: hashedPassword, 
+            sponsorId, 
+            role: role || 'Customer', // Default role Customer rahega
+            adhaar,
+            pan
+        });
+
         await user.save();
 
-        res.status(201).json({ success: true, message: "User registered successfully" });
+        res.status(201).json({ 
+            success: true, 
+            message: "User registered successfully! Please login." 
+        });
     } catch (error) {
-        res.status(500).json({ success: false, error: error.message });
+        console.error("Signup Error:", error.message);
+        res.status(500).json({ success: false, error: "Registration failed. Please try again." });
     }
 };
 
-// LOGIN LOGIC
+// --- 2. LOGIN LOGIC ---
 exports.login = async (req, res) => {
     try {
         const { mobile, password, role } = req.body;
 
+        // 1. Find User by mobile and role (Role match hona zaroori hai)
         const user = await User.findOne({ mobile, role });
-        if (!user) return res.status(400).json({ message: "Invalid Credentials or Role" });
+        if (!user) {
+            return res.status(400).json({ error: "No account found with this role/mobile" });
+        }
 
+        // 2. Verify Password
         const isMatch = await bcrypt.compare(password, user.password);
-        if (!isMatch) return res.status(400).json({ message: "Invalid Password" });
+        if (!isMatch) {
+            return res.status(400).json({ error: "Incorrect password. Please try again." });
+        }
 
-        // Generate JWT Token
+        // 3. Generate JWT Token
         const token = jwt.sign(
             { id: user._id, role: user.role }, 
             process.env.JWT_SECRET, 
             { expiresIn: '1d' }
         );
 
+        // 4. Send Success Response
         res.json({
             success: true,
             token,
-            user: { id: user._id, fullName: user.fullName, role: user.role }
+            user: { 
+                id: user._id, 
+                fullName: user.fullName, 
+                role: user.role,
+                mobile: user.mobile 
+            }
         });
     } catch (error) {
-        res.status(500).json({ success: false, error: error.message });
+        console.error("Login Error:", error.message);
+        res.status(500).json({ success: false, error: "Internal Server Error" });
     }
 };

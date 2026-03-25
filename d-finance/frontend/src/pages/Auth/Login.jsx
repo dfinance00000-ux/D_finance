@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import API from "../../api/axios";
+import { loginUser } from "../../api/authApi"; // Naya API function use karein
 
 const Login = () => {
   const [credentials, setCredentials] = useState({ 
@@ -16,9 +16,8 @@ const Login = () => {
     setLoading(true);
 
     try {
-      // Backend ko data bhej rahe hain
-      // Note: Backend server.js mein bhi login route ko 'mobile' accept karne ke liye update karna hoga
-      const response = await API.post('/auth/login', {
+      // Humne jo authApi.js mein function banaya tha usey call kar rahe hain
+      const response = await loginUser({
         mobile: credentials.mobile,
         password: credentials.password,
         role: credentials.role
@@ -33,18 +32,18 @@ const Login = () => {
         // Success Message
         alert(`Swagat hai, ${user.fullName}!`);
 
-        // Role-based Redirect Logic
+        // Role-based Redirect Logic (Updated for D-Finance V3)
         const rolePaths = {
           'Admin': '/admin',
-          'User': '/user', // Advisor
+          'User': '/user', // Advisor/Agent Dashboard
           'Customer': '/customer/dashboard'
         };
 
         navigate(rolePaths[user.role] || '/');
       }
     } catch (error) {
-      // Agar error string hai (interceptor ki wajah se) toh wo dikhao, warna object handle karo
-      const errorMsg = typeof error === 'string' ? error : (error.response?.data?.error || "Login Failed");
+      // Hamara axios.js interceptor ab seedha error message (string) bhejta hai
+      const errorMsg = typeof error === 'string' ? error : "Login Failed. Server unreachable.";
       alert(errorMsg);
     } finally {
       setLoading(false);
@@ -60,6 +59,7 @@ const Login = () => {
         </div>
 
         <form onSubmit={handleLogin}>
+          {/* --- Role Selection --- */}
           <div style={inputGroup}>
             <label style={labelStyle}>Login Role</label>
             <select 
@@ -74,6 +74,7 @@ const Login = () => {
             </select>
           </div>
 
+          {/* --- Mobile Input --- */}
           <div style={inputGroup}>
             <label style={labelStyle}>Mobile Number</label>
             <input 
@@ -87,6 +88,7 @@ const Login = () => {
             />
           </div>
 
+          {/* --- Password Input --- */}
           <div style={inputGroup}>
             <label style={labelStyle}>Password</label>
             <input 
@@ -100,7 +102,11 @@ const Login = () => {
             />
           </div>
 
-          <button type="submit" disabled={loading} style={loading ? {...btnStyle, background: '#94a3b8', cursor: 'not-allowed'} : btnStyle}>
+          <button 
+            type="submit" 
+            disabled={loading} 
+            style={loading ? {...btnStyle, background: '#94a3b8', cursor: 'not-allowed'} : btnStyle}
+          >
             {loading ? 'Verifying Identity...' : 'Sign In to Account'}
           </button>
         </form>
@@ -116,7 +122,7 @@ const Login = () => {
   );
 };
 
-// --- Styles remain same as your original code ---
+// --- Styles remain exactly as you defined ---
 const pageWrapper = { height: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#0f172a', fontFamily: 'sans-serif' };
 const loginCard = { width: '100%', maxWidth: '420px', background: '#ffffff', padding: '45px', borderRadius: '24px', boxShadow: '0 25px 50px -12px rgba(0,0,0,0.5)' };
 const logoStyle = { color: '#2563eb', fontSize: '32px', fontWeight: '900', margin: 0, letterSpacing: '-1px' };
