@@ -19,9 +19,8 @@ const Signup = () => {
     mobile: '',
     email: '',
     password: '',
-    sponsorId: '', 
-    role: 'Customer', 
-    cibilScore: 750 
+    referredBy: '', // Advisor ID/Field Officer ID
+    role: 'Field Officer', // Default selection for your new panel
   });
 
   const navigate = useNavigate();
@@ -40,62 +39,63 @@ const Signup = () => {
     return () => clearInterval(interval);
   }, [step, timer]);
 
-  // --- STEP 1: Aadhaar OTP Request (Using loanApi) ---
+  // --- STEP 1: Aadhaar OTP Request ---
   const handleRequestOTP = async (e) => {
     if (e) e.preventDefault();
     setLoading(true);
     try {
       const res = await sendAadhaarOTP(kycDetails.adhaar);
+      // Backend Mock ho ya Live, success check karega
       if (res.data.success) {
         setRefId(res.data.ref_id);
         setStep(1.5);
         setTimer(60);
         setCanResend(false);
-        alert("OTP sent to your Aadhaar-linked mobile!");
       }
     } catch (err) {
-      alert(err || "Aadhaar verification failed. Check number.");
+      alert(err.error || "Aadhaar Service Unavailable. Please try later.");
     } finally {
       setLoading(false);
     }
   };
 
-  // --- STEP 1.5: Verify OTP (Using loanApi) ---
+  // --- STEP 1.5: Verify OTP ---
   const handleVerifyOTP = async (e) => {
     e.preventDefault();
     setLoading(true);
     try {
       const res = await verifyAadhaarOTP({ otp, ref_id: refId });
       if (res.data.success) {
-        // Sandbox API se full_name nikalna
-        const fetchName = res.data.customerData.full_name;
+        // Backend se fetch kiya hua real/mock name set karega
+        const fetchName = res.data.data.full_name;
         setUserData({ ...userData, fullName: fetchName });
         setStep(2);
       }
     } catch (err) {
-      alert("Invalid OTP or Session Expired.");
+      alert("Invalid OTP. Verification failed.");
     } finally {
       setLoading(false);
     }
   };
 
-  // --- STEP 2: Final Registration (Using authApi) ---
+  // --- STEP 2: Final Registration ---
   const handleFinalSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
     try {
       const signupData = {
         ...userData,
-        adhaar: kycDetails.adhaar,
-        pan: kycDetails.pan,
+        aadhaarNumber: kycDetails.adhaar,
+        panNumber: kycDetails.pan,
       };
+      
       const res = await signupUser(signupData);
-      if (res.status === 201) {
-        alert("Account Created Successfully!");
+      if (res.status === 201 || res.data.success) {
+        alert("Field Officer Registered Successfully!");
         navigate('/login');
       }
     } catch (err) {
-      alert(err || "Registration Failed.");
+      alert(err.error || "Registration Failed.");
     } finally {
       setLoading(false);
     }
@@ -103,56 +103,78 @@ const Signup = () => {
 
   return (
     <div style={containerStyle}>
-      <div style={cardStyle}>
+      <div style={cardStyle} className="animate-fadeIn">
         <div style={headerStyle}>
-          <h2 style={{ color: '#2563eb', margin: 0, fontWeight: '900' }}>D-FINANCE</h2>
-          <p style={subHeader}>AI-POWERED KYC VERIFICATION</p>
+          <h2 style={{ color: '#2563eb', margin: 0, fontWeight: '900', letterSpacing: '-1px' }}>D-FINANCE</h2>
+          <p style={subHeader}>OFFICIAL FIELD OFFICER REGISTRATION</p>
         </div>
 
-        {/* STEP 1: Identity Input */}
+        {/* --- Progress Bar --- */}
+        <div style={{ display: 'flex', gap: '5px', marginBottom: '20px' }}>
+            <div style={{ flex: 1, height: '4px', background: '#2563eb', borderRadius: '10px' }}></div>
+            <div style={{ flex: 1, height: '4px', background: step >= 1.5 ? '#2563eb' : '#f1f5f9', borderRadius: '10px' }}></div>
+            <div style={{ flex: 1, height: '4px', background: step === 2 ? '#2563eb' : '#f1f5f9', borderRadius: '10px' }}></div>
+        </div>
+
+        {/* STEP 1: Aadhaar & PAN */}
         {step === 1 && (
           <form onSubmit={handleRequestOTP}>
-            <p style={stepText}>Step 1: ID Verification</p>
-            <input type="text" placeholder="Aadhaar Number (12 Digit)" style={inputStyle} required maxLength="12"
+            <p style={stepText}>Step 1: E-KYC Identity</p>
+            <input type="text" placeholder="Aadhaar Number" style={inputStyle} required maxLength="12"
               onChange={(e) => setKycDetails({...kycDetails, adhaar: e.target.value})} />
-            <input type="text" placeholder="PAN Number (ABCDE1234F)" style={inputStyle} required maxLength="10"
+            <input type="text" placeholder="PAN Number" style={inputStyle} required maxLength="10"
               onChange={(e) => setKycDetails({...kycDetails, pan: e.target.value.toUpperCase()})} />
+            
+            <div style={infoBox}>
+                ℹ️ We'll send an OTP to your Aadhaar-linked mobile number for instant verification.
+            </div>
+
             <button type="submit" disabled={loading} style={mainBtn}>
-              {loading ? 'Requesting Secure OTP...' : 'Send Aadhaar OTP'}
+              {loading ? 'Securing Connection...' : 'Verify Identity'}
             </button>
           </form>
         )}
 
-        {/* STEP 1.5: OTP Verification */}
+        {/* STEP 1.5: OTP Verify */}
         {step === 1.5 && (
           <form onSubmit={handleVerifyOTP}>
             <p style={stepText}>Verifying Aadhaar OTP</p>
-            <input type="text" placeholder="●●●●●●" style={{...inputStyle, textAlign: 'center', fontSize: '22px', letterSpacing: '4px'}} required maxLength="6"
+            <p style={{ textAlign: 'center', fontSize: '12px', color: '#64748b' }}>OTP sent for Ref: {refId}</p>
+            <input type="text" placeholder="000000" style={{...inputStyle, textAlign: 'center', fontSize: '24px', letterSpacing: '8px'}} required maxLength="6"
               onChange={(e) => setOtp(e.target.value)} />
             
             <div style={{ textAlign: 'center', margin: '15px 0' }}>
               {timer > 0 ? (
-                <p style={{ fontSize: '13px', color: '#64748b' }}>Request new OTP in <span style={{ color: '#2563eb', fontWeight: 'bold' }}>{timer}s</span></p>
+                <p style={{ fontSize: '13px', color: '#64748b' }}>Resend available in <span style={{ color: '#2563eb', fontWeight: 'bold' }}>{timer}s</span></p>
               ) : (
-                <button type="button" onClick={handleRequestOTP} style={resendBtn}>Resend OTP</button>
+                <button type="button" onClick={handleRequestOTP} style={resendBtn}>Resend OTP Now</button>
               )}
             </div>
 
             <button type="submit" disabled={loading} style={mainBtn}>
-              {loading ? 'Checking...' : 'Verify & Continue'}
+              {loading ? 'Verifying...' : 'Confirm & Proceed'}
             </button>
-            <p style={backBtn} onClick={() => setStep(1)}>← Correction in Details</p>
+            <p style={backBtn} onClick={() => setStep(1)}>← Change ID Details</p>
           </form>
         )}
 
-        {/* STEP 2: Final Details */}
+        {/* STEP 2: Profile Setup */}
         {step === 2 && (
           <form onSubmit={handleFinalSubmit}>
-            <p style={stepText}>Step 2: Profile Setup</p>
-            <div style={badge}>✅ Verified: {userData.fullName}</div>
+            <p style={stepText}>Step 2: Officer Profile</p>
+            <div style={badge}>👤 Verified Name: {userData.fullName}</div>
 
-            <input type="text" placeholder="Advisor ID (If any)" style={{...inputStyle, border: '1.5px solid #2563eb'}} 
-              onChange={(e) => setUserData({...userData, sponsorId: e.target.value})} />
+            <select 
+              style={inputStyle} 
+              value={userData.role} 
+              onChange={(e) => setUserData({...userData, role: e.target.value})}
+            >
+                <option value="Field Officer">Field Officer (Advisor)</option>
+                <option value="Customer">Customer (Borrower)</option>
+            </select>
+
+            <input type="text" placeholder="Sponsor/Referral ID (Optional)" style={inputStyle}
+              onChange={(e) => setUserData({...userData, referredBy: e.target.value})} />
 
             <input type="text" placeholder="Mobile Number" style={inputStyle} required maxLength="10"
               onChange={(e) => setUserData({...userData, mobile: e.target.value})} />
@@ -160,35 +182,36 @@ const Signup = () => {
             <input type="email" placeholder="Email Address" style={inputStyle} required 
               onChange={(e) => setUserData({...userData, email: e.target.value})} />
 
-            <input type="password" placeholder="Create Strong Password" style={inputStyle} required 
+            <input type="password" placeholder="Create Access Password" style={inputStyle} required 
               onChange={(e) => setUserData({...userData, password: e.target.value})} />
 
             <button type="submit" disabled={loading} style={mainBtn}>
-              {loading ? 'Finalizing...' : 'Complete Registration'}
+              {loading ? 'Creating Account...' : 'Complete Officer Setup'}
             </button>
           </form>
         )}
 
         <div style={footerStyle}>
-          <Link to="/login" style={linkStyle}>Member of D-Finance? <span style={{color: '#2563eb'}}>Sign In</span></Link>
+          <Link to="/login" style={linkStyle}>Already have an account? <span style={{color: '#2563eb'}}>Sign In</span></Link>
         </div>
       </div>
     </div>
   );
 };
 
-// --- Styles (Cleanup for D-Finance Branding) ---
-const containerStyle = { height: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#0f172a' };
-const cardStyle = { width: '400px', background: '#fff', padding: '40px', borderRadius: '30px', boxShadow: '0 25px 50px rgba(0,0,0,0.3)' };
+// --- Updated Styles ---
+const containerStyle = { height: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#f8fafc' };
+const cardStyle = { width: '420px', background: '#fff', padding: '40px', borderRadius: '32px', boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)', border: '1px solid #e2e8f0' };
 const headerStyle = { textAlign: 'center', marginBottom: '25px' };
-const subHeader = { fontSize: '10px', fontWeight: '900', color: '#94a3b8', letterSpacing: '1.5px', marginTop: '5px' };
-const inputStyle = { width: '100%', padding: '15px', margin: '8px 0', borderRadius: '14px', border: '2px solid #f1f5f9', boxSizing: 'border-box', fontSize: '14px', fontWeight: '600', outline: 'none', background: '#f8fafc' };
-const mainBtn = { width: '100%', padding: '16px', background: '#2563eb', color: '#fff', border: 'none', borderRadius: '15px', fontWeight: 'bold', cursor: 'pointer', marginTop: '15px', boxShadow: '0 10px 15px -3px rgba(37, 99, 235, 0.4)' };
-const resendBtn = { background: 'none', border: 'none', color: '#2563eb', fontSize: '13px', fontWeight: 'bold', cursor: 'pointer', textDecoration: 'underline' };
+const subHeader = { fontSize: '9px', fontWeight: '900', color: '#94a3b8', letterSpacing: '2px', marginTop: '8px', textTransform: 'uppercase' };
+const inputStyle = { width: '100%', padding: '16px', margin: '10px 0', borderRadius: '16px', border: '1.5px solid #e2e8f0', boxSizing: 'border-box', fontSize: '14px', fontWeight: '600', outline: 'none', transition: 'all 0.2s' };
+const mainBtn = { width: '100%', padding: '18px', background: '#2563eb', color: '#fff', border: 'none', borderRadius: '18px', fontWeight: '800', cursor: 'pointer', marginTop: '15px', fontSize: '15px' };
+const resendBtn = { background: 'none', border: 'none', color: '#2563eb', fontSize: '13px', fontWeight: 'bold', cursor: 'pointer' };
 const backBtn = { textAlign: 'center', cursor: 'pointer', color: '#94a3b8', fontSize: '12px', marginTop: '20px', fontWeight: 'bold' };
-const stepText = { textAlign: 'center', fontSize: '11px', fontWeight: '900', color: '#475569', textTransform: 'uppercase', marginBottom: '15px', letterSpacing: '0.5px' };
-const badge = { background: '#eff6ff', color: '#1d4ed8', padding: '12px', borderRadius: '12px', textAlign: 'center', fontSize: '13px', fontWeight: 'bold', marginBottom: '15px', border: '1px solid #dbeafe' };
-const footerStyle = { textAlign: 'center', marginTop: '20px', borderTop: '1px solid #f1f5f9', paddingTop: '20px' };
+const stepText = { textAlign: 'center', fontSize: '10px', fontWeight: '900', color: '#1e293b', textTransform: 'uppercase', marginBottom: '20px', letterSpacing: '1px' };
+const badge = { background: '#f0f9ff', color: '#0369a1', padding: '14px', borderRadius: '16px', textAlign: 'center', fontSize: '14px', fontWeight: 'bold', marginBottom: '20px', border: '1px solid #bae6fd' };
+const infoBox = { background: '#f8fafc', padding: '12px', borderRadius: '12px', fontSize: '11px', color: '#64748b', lineHeight: '1.5', marginTop: '10px', border: '1px dashed #cbd5e1' };
+const footerStyle = { textAlign: 'center', marginTop: '25px', borderTop: '1px solid #f1f5f9', paddingTop: '20px' };
 const linkStyle = { color: '#64748b', textDecoration: 'none', fontSize: '13px', fontWeight: '700' };
 
 export default Signup;

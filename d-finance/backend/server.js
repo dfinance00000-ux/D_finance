@@ -2,217 +2,257 @@ require('dotenv').config();
 const express = require('express');
 const connectDB = require('./config/db'); 
 const cors = require('cors');
-const mongoose = require('mongoose');
 const jwt = require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
-const Razorpay = require('razorpay');
-const axios = require('axios');
-const crypto = require('crypto');
 
 // Models Import
 const User = require('./models/User'); 
 const Loan = require('./models/Loan'); 
-const Payment = require('./models/Payment');
 
-connectDB();
 const app = express();
 
-app.use(cors({ origin: "*", credentials: true })); 
+// --- 1. DATABASE & MIDDLEWARES ---
+connectDB();
+app.use(cors({ 
+    origin: ["http://localhost:5173", "https://d-finance-izsi.vercel.app"], 
+    credentials: true 
+})); 
 app.use(express.json());
-
-// --- 1. RAZORPAY CONFIG ---
-const razorpay = new Razorpay({
-  key_id: process.env.RAZORPAY_KEY_ID,
-  key_secret: process.env.RAZORPAY_KEY_SECRET,
-});
 
 // --- 2. AUTH MIDDLEWARE ---
 const verifyToken = (req, res, next) => {
-  const token = req.headers['authorization']?.split(' ')[1];
-  if (!token) return res.status(403).json({ error: "Access Denied" });
-  try {
-    const verified = jwt.verify(token, process.env.JWT_SECRET);
-    req.user = verified;
-    next();
-  } catch (err) { res.status(401).json({ error: "Invalid Token" }); }
+    const token = req.headers['authorization']?.split(' ')[1];
+    if (!token) return res.status(403).json({ error: "Access Denied" });
+    try {
+        const verified = jwt.verify(token, process.env.JWT_SECRET);
+        req.user = verified;
+        next();
+    } catch (err) { res.status(401).json({ error: "Invalid Token" }); }
 };
 
-// --- 3. ADMIN ANALYTICS & SEARCH ---
-
-app.get('/api/admin/stats', verifyToken, async (req, res) => {
-  if (req.user.role !== 'Admin') return res.status(403).json({ error: "Unauthorized" });
-  try {
-    const totalLoans = await Loan.aggregate([{ $group: { _id: null, total: { $sum: "$amount" } } }]);
-    const totalRecovery = await Payment.aggregate([{ $match: { status: 'Success' } }, { $group: { _id: null, total: { $sum: "$amount" } } }]);
-    const activeCustomers = await User.countDocuments({ role: 'Customer' });
-    res.json({
-      totalDisbursed: totalLoans[0]?.total || 0,
-      totalRecovered: totalRecovery[0]?.total || 0,
-      customerCount: activeCustomers
-    });
-  } catch (err) { res.status(500).json({ error: "Stats Fetch Failed" }); }
-});
-
-app.get('/api/admin/search', verifyToken, async (req, res) => {
-  if (req.user.role !== 'Admin') return res.status(403).json({ error: "Unauthorized" });
-  const { q } = req.query;
-  try {
-    const customers = await User.find({
-      role: 'Customer',
-      $or: [{ fullName: { $regex: q, $options: 'i' } }, { mobile: { $regex: q, $options: 'i' } }]
-    }).limit(5);
-    const loans = await Loan.find({
-      $or: [{ loanId: { $regex: q, $options: 'i' } }, { customerName: { $regex: q, $options: 'i' } }]
-    }).limit(5);
-    res.json({ customers, loans });
-  } catch (err) { res.status(500).json({ error: "Search Failed" }); }
-});
-
-app.get('/api/admin/all-users', verifyToken, async (req, res) => {
-  if (req.user.role !== 'Admin') return res.status(403).json({ error: "Unauthorized" });
-  try {
-    const users = await User.find({}, '-password');
-    res.json(users);
-  } catch (err) { res.status(500).json({ error: "Users Fetch Failed" }); }
-});
-
-app.get('/api/admin/collection-report', verifyToken, async (req, res) => {
-  if (req.user.role !== 'Admin') return res.status(403).json({ error: "Unauthorized" });
-  try {
-    const startOfDay = new Date();
-    startOfDay.setHours(0, 0, 0, 0);
-    const dailyPayments = await Payment.find({ status: 'Success', paymentDate: { $gte: startOfDay } }).sort({ paymentDate: -1 });
-    res.json(dailyPayments);
-  } catch (err) { res.status(500).json({ error: "Collection Report Failed" }); }
-});
-
-// --- 4. DYNAMIC EMI PAYMENT ROUTES ---
-
-app.post('/api/payments/create-emi-order', verifyToken, async (req, res) => {
-  try {
-    const { loanId } = req.body;
-    const loan = await Loan.findOne({ loanId });
-    if (!loan) return res.status(404).json({ error: "Loan not found" });
-    const options = {
-      amount: Math.round(loan.emiAmount * 100), 
-      currency: "INR",
-      receipt: `rcpt_${loanId}_${Date.now()}`,
-    };
-    const order = await razorpay.orders.create(options);
-    res.json({ orderId: order.id, amount: loan.emiAmount, key: process.env.RAZORPAY_KEY_ID });
-  } catch (err) { res.status(500).json({ error: "Order Failed" }); }
-});
-
-app.post('/api/payments/verify', verifyToken, async (req, res) => {
-  try {
-    const { razorpay_order_id, razorpay_payment_id, razorpay_signature, loanId } = req.body;
-    const sign = razorpay_order_id + "|" + razorpay_payment_id;
-    const expectedSign = crypto.createHmac("sha256", process.env.RAZORPAY_KEY_SECRET).update(sign.toString()).digest("hex");
-
-    if (razorpay_signature !== expectedSign) return res.status(400).json({ error: "Invalid Signature" });
-
-    const loan = await Loan.findOne({ loanId });
-    loan.totalPaid += loan.emiAmount;
-    
-    // Auto-Closure Logic
-    if (loan.totalPaid >= loan.amount) {
-        loan.status = 'Closed';
-    }
-
-    loan.repaymentHistory.push({ paymentId: razorpay_payment_id, orderId: razorpay_order_id, amount: loan.emiAmount });
-    await loan.save();
-
-    const newPayment = new Payment({
-      receiptId: `RCPT-${Math.floor(100000 + Math.random() * 900000)}`,
-      loanId: loan.loanId, customerId: req.user.id, customerName: loan.customerName,
-      amount: loan.emiAmount, razorpay_order_id, razorpay_payment_id, status: 'Success', method: 'Online'
-    });
-    await newPayment.save();
-
-    res.json({ success: true, message: "Payment Recorded!", loanStatus: loan.status });
-  } catch (err) { res.status(500).json({ error: "Verification Error" }); }
-});
-
-// --- 5. KYC & LOAN ROUTES ---
-
-app.post('/api/kyc/aadhaar-otp', async (req, res) => {
-  try {
-    const { adhaarNumber } = req.body;
-    const response = await axios.post('https://api.sandbox.co.in/kyc/aadhaar/okyc/otp/request', 
-      { "@entity": "AadhaarOTPRequest", "aadhaar_number": adhaarNumber },
-      { headers: { 'x-api-key': process.env.SANDBOX_API_KEY, 'x-api-secret': process.env.SANDBOX_SECRET, 'x-api-version': '1.0' }}
-    );
-    res.json({ success: true, ref_id: response.data.data.reference_id });
-  } catch (err) { res.status(500).json({ error: "KYC Service Down" }); }
-});
-
-app.post('/api/kyc/aadhaar-verify', async (req, res) => {
-  try {
-    const { otp, ref_id } = req.body;
-    const response = await axios.post('https://api.sandbox.co.in/kyc/aadhaar/okyc/otp/verify', 
-      { "@entity": "AadhaarOTPVerify", "otp": otp, "reference_id": ref_id },
-      { headers: { 'x-api-key': process.env.SANDBOX_API_KEY, 'x-api-secret': process.env.SANDBOX_SECRET, 'x-api-version': '1.0' }}
-    );
-    res.json({ success: true, customerData: response.data.data });
-  } catch (err) { res.status(500).json({ error: "Verification Failed" }); }
-});
-
-app.get('/api/admin/all-loans', verifyToken, async (req, res) => {
-  if (req.user.role !== 'Admin') return res.status(403).json({ error: "Unauthorized" });
-  try {
-    const loans = await Loan.find().sort({ createdAt: -1 });
-    res.json(loans);
-  } catch (err) { res.status(500).json({ error: "Fetch Failed" }); }
-});
-
-app.put('/api/admin/approve-loan/:id', verifyToken, async (req, res) => {
-  if (req.user.role !== 'Admin') return res.status(403).json({ error: "Unauthorized" });
-  try {
-    const loan = await Loan.findByIdAndUpdate(req.params.id, { 
-      status: 'Approved', approvedBy: req.user.id, approvalDate: new Date() 
-    }, { new: true });
-    res.json({ message: "Loan Approved!", loan });
-  } catch (err) { res.status(500).json({ error: "Approval Error" }); }
-});
-
-// --- 6. AUTH ROUTES ---
-
+// --- 3. AUTH ROUTES ---
 app.post('/api/auth/signup', async (req, res) => {
-  try {
-    const { email, mobile, password } = req.body;
-    const cleanEmail = email.toLowerCase().trim();
-    const salt = await bcrypt.genSalt(10);
-    const hashedPassword = await bcrypt.hash(password, salt);
-    const newUser = new User({ ...req.body, email: cleanEmail, password: hashedPassword });
-    await newUser.save();
-    res.status(201).json({ message: "Success" });
-  } catch (err) { res.status(400).json({ error: err.message }); }
+    try {
+        const { mobile, password, role, fullName, email } = req.body;
+        const userExists = await User.findOne({ mobile });
+        if (userExists) return res.status(400).json({ error: "Mobile already exists" });
+
+        const salt = await bcrypt.genSalt(10);
+        const hashedPassword = await bcrypt.hash(password, salt);
+        
+        const newUser = new User({ 
+            fullName, mobile, email: email?.toLowerCase().trim(), 
+            password: hashedPassword, role: role || 'Customer', isVerified: false 
+        });
+
+        await newUser.save();
+        res.status(201).json({ success: true, message: "Registration successful" });
+    } catch (err) { res.status(400).json({ error: err.message }); }
 });
 
 app.post('/api/auth/login', async (req, res) => {
-  try {
-    const { mobile, password } = req.body;
-    const user = await User.findOne({ mobile });
-    if (!user || !(await bcrypt.compare(password, user.password))) return res.status(401).json({ error: "Invalid Login" });
-    const token = jwt.sign({ id: user._id, role: user.role }, process.env.JWT_SECRET, { expiresIn: '1d' });
-    res.json({ token, user: { id: user._id, fullName: user.fullName, role: user.role } });
-  } catch (err) { res.status(500).json({ error: "Login Error" }); }
+    try {
+        const { mobile, password } = req.body;
+        const user = await User.findOne({ mobile });
+        if (!user) return res.status(401).json({ error: "Account not found" });
+
+        const isMatch = await bcrypt.compare(password, user.password);
+        if (!isMatch) return res.status(401).json({ error: "Invalid Credentials" });
+
+        const token = jwt.sign({ id: user._id, role: user.role, fullName: user.fullName }, process.env.JWT_SECRET, { expiresIn: '1d' });
+        res.json({ success: true, token, user: { id: user._id, fullName: user.fullName, role: user.role } });
+    } catch (err) { res.status(500).json({ error: "Login Server Error" }); }
 });
 
-// server.js mein kahin bhi temporary daal do, ek baar chalne ke baad hata dena
-const createAdmin = async () => {
-    const salt = await bcrypt.genSalt(10);
-    const hashed = await bcrypt.hash("admin123", salt);
-    const admin = new User({
-        fullName: "Aditya Admin",
-        mobile: "9999999999", // Apna number dalo
-        password: hashed,
-        role: "Admin"
+// --- 4. LOAN SYSTEM (CUSTOMER & FILTERS) ---
+
+app.post('/api/loans', verifyToken, async (req, res) => {
+  try {
+    const loanData = req.body;
+    // Initial Status setting for Pool visibility
+    const newLoan = new Loan({
+        ...loanData,
+        customerId: req.user.id,
+        totalPending: loanData.totalPayable || 0,
+        status: 'Hold - Pending Assignment', // Standard New Lead status
+        isAssigned: false
     });
-    await admin.save();
-    console.log("✅ Admin Created!");
-};
-// createAdmin(); // Is line ko uncomment karke ek baar server start karo
-// Start Server
-const PORT = process.env.PORT || 10000;
+    await newLoan.save();
+    res.status(201).json({ success: true, loan: newLoan });
+  } catch (err) { res.status(400).json({ error: err.message }); }
+});
+
+app.get('/api/loans', verifyToken, async (req, res) => {
+    try {
+        const { status, sponsorId } = req.query;
+        let query = {};
+        if (sponsorId) query.fieldOfficerId = sponsorId;
+
+        // Flexible Status Handling
+        if (status) {
+            if (status === "Verification Pending") {
+                query.status = { $in: ["Verification Pending", "Pending Verification"] };
+            } else {
+                query.status = status;
+            }
+        }
+
+        if (!status && !sponsorId) query.customerId = req.user.id;
+
+        const loans = await Loan.find(query).sort({ createdAt: -1 });
+        res.json(loans);
+    } catch (err) { res.status(500).json({ error: "Fetch error" }); }
+});
+
+// --- 5. FIELD OFFICER / ADVISOR ROUTES ---
+
+// Pool: Advisor picks new leads
+app.get('/api/officer/available-requests', verifyToken, async (req, res) => {
+    try {
+        const userRole = req.user.role ? req.user.role.toLowerCase() : "";
+        if (userRole !== 'user' && userRole !== 'admin') {
+            return res.status(403).json({ error: "Access Denied" });
+        }
+
+        // Fix: Shows both 'Applied' and 'Hold' leads
+        const unassigned = await Loan.find({ 
+            isAssigned: false, 
+            status: { $in: ['Applied', 'Hold - Pending Assignment'] } 
+        }).sort({ createdAt: -1 });
+        
+        res.json(unassigned);
+    } catch (err) { res.status(500).json({ error: "Pool Fetch Error" }); }
+});
+
+// Accept Lead
+// Accept Lead Fix: Support for both MongoDB _id and custom loanId
+app.post('/api/officer/accept-loan/:id', verifyToken, async (req, res) => {
+    try {
+        const { id } = req.params;
+
+        // 🚀 Check: Agar ID 'LN-' se start ho rahi hai toh custom find karein, warna findById
+        const query = id.startsWith('LN-') ? { loanId: id } : { _id: id };
+
+        const loan = await Loan.findOneAndUpdate(
+            query, 
+            {
+                fieldOfficerId: req.user.id,
+                isAssigned: true,
+                status: 'Pending Verification'
+            }, 
+            { new: true }
+        );
+
+        if (!loan) {
+            return res.status(404).json({ error: "Loan not found in database" });
+        }
+
+        console.log(`✅ Loan ${id} accepted by ${req.user.fullName}`);
+        res.json({ success: true, loan });
+    } catch (err) { 
+        console.error("❌ Accept Error Details:", err.message);
+        res.status(500).json({ error: "Accept Error", details: err.message }); 
+    }
+});
+// Submit Audit (PATCH)
+app.patch('/api/loans/:id', verifyToken, async (req, res) => {
+    try {
+        const updatedLoan = await Loan.findByIdAndUpdate(
+            req.params.id, 
+            { $set: { ...req.body, status: 'Field Verified' } }, 
+            { new: true }
+        );
+        res.json({ success: true, loan: updatedLoan });
+    } catch (err) { res.status(500).json({ error: "Audit Submit Error" }); }
+});
+
+// --- 6. ACCOUNTANT & ADMIN DASHBOARD ---
+
+app.get('/api/accountant/pending', verifyToken, async (req, res) => {
+    try {
+        const role = req.user.role.toLowerCase();
+        if (role !== 'accountant' && role !== 'admin') {
+            return res.status(403).json({ error: "Access Denied" });
+        }
+        const loans = await Loan.find({ status: 'Field Verified' }).sort({ updatedAt: -1 });
+        res.json(loans);
+    } catch (err) { res.status(500).json({ error: "Accountant fetch error" }); }
+});
+
+app.get('/api/user/my-dashboard', verifyToken, async (req, res) => {
+    try {
+        const officerId = req.user.id;
+        const unassigned = await Loan.countDocuments({ 
+            isAssigned: false, 
+            status: { $in: ['Applied', 'Hold - Pending Assignment'] } 
+        });
+        const pending = await Loan.countDocuments({ 
+            fieldOfficerId: officerId, 
+            status: { $in: ['Pending Verification', 'Verification Pending'] } 
+        });
+
+        res.json({ success: true, stats: { pending, unassigned } });
+    } catch (err) { res.status(500).json({ error: "Dashboard stats failed" }); }
+});
+
+// Fix for Admin Performance Page
+app.get('/api/admin/all-users', verifyToken, async (req, res) => {
+    try {
+        const users = await User.find({}).select('-password');
+        res.json(users);
+    } catch (err) { res.status(500).json({ error: "Users fetch error" }); }
+});
+
+app.get('/api/admin/all-loans', verifyToken, async (req, res) => {
+    try {
+        const loans = await Loan.find({}).sort({ createdAt: -1 });
+        res.json(loans);
+    } catch (err) { res.status(500).json({ error: "Loans fetch error" }); }
+});
+// --- ADMIN: MASTER CONTROL ROUTES ---
+
+// 1. Fix: /admin/approvals (Shows loans ready for Admin's final look)
+app.get('/api/admin/pending-approvals', verifyToken, async (req, res) => {
+    try {
+        if (req.user.role !== 'Admin') return res.status(403).json({ error: "Admin Only" });
+        // Wo saare loans jo Advisor ne verify kar diye hain ya Accountant ke paas hain
+        const loans = await Loan.find({ 
+            status: { $in: ['Field Verified', 'Pending Accountant Approval', 'Applied'] } 
+        }).sort({ createdAt: -1 });
+        res.json(loans);
+    } catch (err) { res.status(500).json({ error: "Fetch Error" }); }
+});
+
+// 2. Fix: /admin/advisor-performance (Calculates stats per Advisor)
+app.get('/api/admin/advisor-stats', verifyToken, async (req, res) => {
+    try {
+        if (req.user.role !== 'Admin') return res.status(403).json({ error: "Admin Only" });
+        
+        // Sabhi Advisors (User role) nikalna
+        const advisors = await User.find({ role: { $in: ['User', 'FieldOfficer'] } });
+        
+        const performanceData = await Promise.all(advisors.map(async (adv) => {
+            const assigned = await Loan.countDocuments({ fieldOfficerId: adv._id });
+            const verified = await Loan.countDocuments({ fieldOfficerId: adv._id, status: 'Field Verified' });
+            const disbursed = await Loan.countDocuments({ fieldOfficerId: adv._id, status: 'Disbursed' });
+            
+            return {
+                advisorName: adv.fullName,
+                mobile: adv.mobile,
+                assigned,
+                verified,
+                disbursed,
+                commission: disbursed * 500 // Example: ₹500 per disbursement
+            };
+        }));
+        
+        res.json(performanceData);
+    } catch (err) { res.status(500).json({ error: "Performance Sync Error" }); }
+});
+
+// 3. Fix: Accountant Add Karne Ka Logic (Signup Route Update)
+// Note: Aapka existing signup route hi kaam karega, bas dropdown mein 'Accountant' role bhejiye.
+
+// --- START SERVER ---
+const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => console.log(`🚀 D-Finance Engine Running on Port ${PORT}`));

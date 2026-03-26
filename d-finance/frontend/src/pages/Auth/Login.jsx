@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import { loginUser } from "../../api/authApi"; // Naya API function use karein
+import { loginUser } from "../../api/authApi"; 
 
 const Login = () => {
   const [credentials, setCredentials] = useState({ 
@@ -16,7 +16,6 @@ const Login = () => {
     setLoading(true);
 
     try {
-      // Humne jo authApi.js mein function banaya tha usey call kar rahe hain
       const response = await loginUser({
         mobile: credentials.mobile,
         password: credentials.password,
@@ -29,20 +28,21 @@ const Login = () => {
         localStorage.setItem('token', token);
         localStorage.setItem('user', JSON.stringify(user));
         
-        // Success Message
         alert(`Swagat hai, ${user.fullName}!`);
 
-        // Role-based Redirect Logic (Updated for D-Finance V3)
+        // --- 🚀 UPDATED ROLE-BASED REDIRECT LOGIC ---
+        // Yahan Accountant ka path add kar diya gaya hai
         const rolePaths = {
           'Admin': '/admin',
           'User': '/user', // Advisor/Agent Dashboard
+          'Accountant': '/accountant/approval', // 🛡️ Naya Accountant Path
           'Customer': '/customer/dashboard'
         };
 
+        // Agar role match nahi hota toh home '/' par bhej dega
         navigate(rolePaths[user.role] || '/');
       }
     } catch (error) {
-      // Hamara axios.js interceptor ab seedha error message (string) bhejta hai
       const errorMsg = typeof error === 'string' ? error : "Login Failed. Server unreachable.";
       alert(errorMsg);
     } finally {
@@ -59,7 +59,7 @@ const Login = () => {
         </div>
 
         <form onSubmit={handleLogin}>
-          {/* --- Role Selection --- */}
+          {/* --- Role Selection (Accountant Added) --- */}
           <div style={inputGroup}>
             <label style={labelStyle}>Login Role</label>
             <select 
@@ -70,6 +70,7 @@ const Login = () => {
             >
               <option value="Admin">System Administrator</option>
               <option value="User">Advisor / Agent</option>
+              <option value="Accountant">Accountant / Finance Officer</option> {/* 🛡️ Added */}
               <option value="Customer">Valued Customer</option>
             </select>
           </div>
@@ -122,7 +123,7 @@ const Login = () => {
   );
 };
 
-// --- Styles remain exactly as you defined ---
+// --- Styles (Fixed for consistent layout) ---
 const pageWrapper = { height: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#0f172a', fontFamily: 'sans-serif' };
 const loginCard = { width: '100%', maxWidth: '420px', background: '#ffffff', padding: '45px', borderRadius: '24px', boxShadow: '0 25px 50px -12px rgba(0,0,0,0.5)' };
 const logoStyle = { color: '#2563eb', fontSize: '32px', fontWeight: '900', margin: 0, letterSpacing: '-1px' };

@@ -15,7 +15,7 @@ import Login from '../pages/Auth/Login';
 import Signup from '../pages/Auth/Signup';
 
 // Admin Pages
-import Dashboard from '../pages/Dashboard/Dashboard';
+import Dashboard from '../pages/Dashboard/AdminDashboard';
 import BranchMaster from '../pages/Master/BranchMaster/BranchMaster';
 import CustomerEntry from '../pages/Customer/CustomerEntry/CustomerEntry';
 import LoanMaster from '../pages/Master/LoanMaster/LoanMaster';
@@ -31,7 +31,7 @@ import AdvisorPerformance from '../pages/Admin/AdvisorPerformance';
 import DailyCollectionReport from '../pages/Admin/DailyCollectionReport'; // Naya Page
 
 // User (Advisor) Pages
-import UserDashboard from '../pages/User/UserDashboard';
+import UserDashboard from '../pages/User/FieldOfficerDashboard';
 import AdvisorVerification from '../pages/Advisor/AdvisorVerification'; 
 
 // Accountant Pages
@@ -39,7 +39,7 @@ import AccountantApproval from '../pages/Accountant/AccountantApproval';
 
 // Customer Pages
 import CustomerDashboard from "../pages/Customer/CustomerDashboard";
-import LoanApply from "../pages/Customer/ApplyLoan";
+import LoanApply from "../pages/Loan/ApplyLoan";
 import LoanTracking from "../pages/Customer/LoanTracking"; 
 import EMIPayments from "../pages/Customer/EMIPayments";
 

@@ -5,17 +5,18 @@ import {
   FiCheckCircle, 
   FiPieChart, 
   FiUsers, 
+  FiBriefcase,
   FiDollarSign, 
   FiLayers, 
   FiLogOut,
-  FiMapPin
+  FiMapPin,
+  FiFileText // ✅ Ye missing tha, ab add kar diya hai
 } from 'react-icons/fi';
 
 const Sidebar = () => {
   const location = useLocation();
   const navigate = useNavigate();
 
-  // Naye Pages ke paths yahan add kiye hain:
   const menuItems = [
     { title: 'Business Stats', path: '/admin/analytics', icon: <FiPieChart /> },
     { title: 'Pending Approvals', path: '/admin/approvals', icon: <FiCheckCircle /> },
@@ -33,7 +34,7 @@ const Sidebar = () => {
   };
 
   return (
-    <div className="w-64 h-screen bg-slate-900 text-white flex flex-col fixed left-0 top-0">
+    <div className="w-64 h-screen bg-slate-900 text-white flex flex-col fixed left-0 top-0 z-50">
       {/* Brand Header */}
       <div className="p-6 border-b border-slate-800">
         <h1 className="text-xl font-bold text-emerald-400 tracking-wider">D-FINANCE</h1>
@@ -41,7 +42,7 @@ const Sidebar = () => {
       </div>
       
       {/* Navigation Links */}
-      <nav className="flex-1 mt-4 px-3 space-y-1 overflow-y-auto">
+      <nav className="flex-1 mt-4 px-3 space-y-1 overflow-y-auto custom-scrollbar">
         {menuItems.map((item) => (
           <Link
             key={item.path}

@@ -6,22 +6,22 @@ const bcrypt = require('bcryptjs');
 exports.signup = async (req, res) => {
     try {
         const { fullName, mobile, email, password, sponsorId, role, adhaar, pan } = req.body;
-        
+        console.log(`📩 Signup Attempt: ${mobile}`);
+
         let user = await User.findOne({ mobile });
         if (user) {
-            return res.status(400).json({ error: "Mobile number already registered." });
+            return res.status(400).json({ error: "Mobile number pehle se registered hai." });
         }
 
         const salt = await bcrypt.genSalt(10);
         const hashedPassword = await bcrypt.hash(password, salt);
 
-        // Role formatting to match your Database (Capital A and C)
+        // Role Formatting: DB mein hamesha Capital A/C save hoga
         let formattedRole = 'Customer'; 
         if (role) {
             const r = role.toLowerCase();
             if (r.includes('admin')) formattedRole = 'Admin';
             else if (r.includes('user') || r.includes('advisor')) formattedRole = 'User';
-            else formattedRole = 'Customer';
         }
 
         user = new User({ 
@@ -30,14 +30,16 @@ exports.signup = async (req, res) => {
             email: email ? email.toLowerCase().trim() : "", 
             password: hashedPassword, 
             sponsorId, 
-            role: formattedRole, // "Admin" or "Customer"
+            role: formattedRole,
             adhaar,
             pan
         });
 
         await user.save();
+        console.log(`✅ User Created: ${fullName} as ${formattedRole}`);
         res.status(201).json({ success: true, message: "Signup Successful!" });
     } catch (error) {
+        console.error("❌ Signup Error:", error.message);
         res.status(500).json({ success: false, error: error.message });
     }
 };
@@ -46,29 +48,35 @@ exports.signup = async (req, res) => {
 exports.login = async (req, res) => {
     try {
         const { mobile, password, role } = req.body;
+        console.log(`🔍 Login Request: Mobile: ${mobile}, Selected Role: ${role}`);
 
         // Step 1: Mobile se user dhoondo
         const user = await User.findOne({ mobile });
+        
         if (!user) {
-            return res.status(400).json({ error: "Mobile number nahi mila." });
+            console.log("❌ Error: Mobile number database mein nahi mila.");
+            return res.status(400).json({ error: "Is number ka koi account nahi mila." });
         }
 
-        // Step 2: Role Matching (Capital A / Capital C Check)
-        // Frontend se 'Admin' ya 'System Administrator' aaye, hum 'Admin' check karenge
-        let checkRole = 'Customer';
-        const r = role.toLowerCase();
-        if (r.includes('admin')) checkRole = 'Admin';
-        else if (r.includes('user') || r.includes('advisor')) checkRole = 'User';
+        console.log(`✅ User Found in Atlas: ${user.fullName} | DB Role: ${user.role}`);
 
-        if (user.role !== checkRole) {
+        // Step 2: Smart Role Matching (Case Insensitive)
+        let normalizedSelectedRole = 'Customer';
+        const r = role.toLowerCase();
+        if (r.includes('admin')) normalizedSelectedRole = 'Admin';
+        else if (r.includes('user') || r.includes('advisor')) normalizedSelectedRole = 'User';
+
+        if (user.role !== normalizedSelectedRole) {
+            console.log(`❌ Role Mismatch: DB has '${user.role}', but you chose '${role}'`);
             return res.status(400).json({ 
-                error: `Role mismatch. DB has '${user.role}', but you selected '${role}'.` 
+                error: `Role mismatch. Database mein aapka role '${user.role}' hai.` 
             });
         }
 
         // Step 3: Password Check
         const isMatch = await bcrypt.compare(password, user.password);
         if (!isMatch) {
+            console.log("❌ Error: Password mismatch.");
             return res.status(400).json({ error: "Password galat hai." });
         }
 
@@ -79,12 +87,15 @@ exports.login = async (req, res) => {
             { expiresIn: '1d' }
         );
 
+        console.log(`🚀 Login Success for: ${user.fullName}`);
         res.json({
             success: true,
             token,
             user: { id: user._id, fullName: user.fullName, role: user.role }
         });
+
     } catch (error) {
-        res.status(500).json({ success: false, error: "Server error during login." });
+        console.error("❌ Login Server Error:", error.message);
+        res.status(500).json({ success: false, error: "Internal Server Error" });
     }
 };
