@@ -13,7 +13,7 @@ const app = express();
 
 // --- 1. DATABASE & MIDDLEWARES ---
 connectDB();
-const cors = require('cors');
+// const cors = require('cors');
 
 // Ye line aapke Vercel frontend ko permission degi
 app.use(cors({
