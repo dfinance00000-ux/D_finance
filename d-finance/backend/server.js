@@ -175,6 +175,7 @@ app.patch('/api/loans/:id', verifyToken, async (req, res) => {
 
 // --- 6. ACCOUNTANT & ADMIN DASHBOARD ---
 
+
 app.get('/api/accountant/pending', verifyToken, async (req, res) => {
     try {
         const role = req.user.role.toLowerCase();
@@ -217,7 +218,23 @@ app.get('/api/admin/all-loans', verifyToken, async (req, res) => {
     } catch (err) { res.status(500).json({ error: "Loans fetch error" }); }
 });
 // --- ADMIN: MASTER CONTROL ROUTES ---
+// server.js mein check karein
+app.post('/api/accountant/approve/:id', verifyToken, async (req, res) => {
+    try {
+        const { id } = req.params;
+        const updatedLoan = await Loan.findByIdAndUpdate(
+            id, 
+            { status: 'Disbursed', disbursedAt: new Date() }, 
+            { new: true }
+        );
 
+        if (!updatedLoan) return res.status(404).json({ error: "Loan not found" });
+
+        res.json({ success: true, message: "Funds Disbursed Locally!", loan: updatedLoan });
+    } catch (err) {
+        res.status(500).json({ error: "Server Error: " + err.message });
+    }
+});
 // 1. Fix: /admin/approvals (Shows loans ready for Admin's final look)
 app.get('/api/admin/pending-approvals', verifyToken, async (req, res) => {
     try {

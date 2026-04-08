@@ -3,13 +3,9 @@ import axios from 'axios';
 const isLocal = window.location.hostname === 'localhost';
 
 const API = axios.create({
-  baseURL: import.meta.env.VITE_API_URL || 
-           (isLocal ? 'http://localhost:5000/api' : 'https://d-finance-backend.onrender.com/api'),
-  headers: {
-    'Content-Type': 'application/json',
-  },
-  timeout: 70000, 
-  withCredentials: true 
+  // baseURL: 'http://localhost:5000/api', // ❌ Ise comment kar do
+  baseURL: 'https://d-finance-backend.onrender.com/api', // ✅ Ye wala rehne do
+  timeout: 60000,
 });
 
 // Request Interceptor
