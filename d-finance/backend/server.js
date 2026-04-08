@@ -182,17 +182,33 @@ app.get('/api/accountant/pending', verifyToken, async (req, res) => {
 app.get('/api/user/my-dashboard', verifyToken, async (req, res) => {
     try {
         const officerId = req.user.id;
-        const unassigned = await Loan.countDocuments({ 
-            isAssigned: false, 
-            status: { $in: ['Applied', 'Hold - Pending Assignment'] } 
-        });
-        const pending = await Loan.countDocuments({ 
-            fieldOfficerId: officerId, 
-            status: { $in: ['Pending Verification', 'Verification Pending'] } 
-        });
 
-        res.json({ success: true, stats: { pending, unassigned } });
-    } catch (err) { res.status(500).json({ error: "Dashboard stats failed" }); }
+        // 1. Calculate Active & Disbursed Loans
+        const myLoans = await Loan.find({ fieldOfficerId: officerId });
+
+        const disbursedAmount = myLoans
+            .filter(l => l.status === 'Disbursed')
+            .reduce((acc, curr) => acc + curr.amount, 0);
+
+        const activeFilesCount = myLoans
+            .filter(l => ['Pending Verification', 'Field Verified'].includes(l.status))
+            .length;
+
+        // 2. Calculate Commission (e.g., 5% on Disbursed Amount)
+        const totalCommission = disbursedAmount * 0.05;
+
+        res.json({
+            success: true,
+            stats: {
+                disbursedAmount,
+                totalCommission,
+                activeFilesCount
+            },
+            recentSubmissions: myLoans.slice(0, 5) // Last 5 activities
+        });
+    } catch (err) {
+        res.status(500).json({ error: "Dashboard sync failed" });
+    }
 });
 
 // Fix for Admin Performance Page
