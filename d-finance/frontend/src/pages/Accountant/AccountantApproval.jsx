@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import API from "../../../api/axios"; // Axios instance configured with baseURL
+import API from "../../api/axios"; // Axios instance configured with baseURL
 
 const AccountantApproval = () => {
   const [verifiedLoans, setVerifiedLoans] = useState([]);
