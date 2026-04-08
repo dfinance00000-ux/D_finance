@@ -5,8 +5,7 @@ import { loginUser } from "../../api/authApi";
 const Login = () => {
   const [credentials, setCredentials] = useState({ 
     mobile: '', 
-    password: '', 
-    role: 'Admin' 
+    password: '' 
   });
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
@@ -16,10 +15,10 @@ const Login = () => {
     setLoading(true);
 
     try {
+      // Role selection dropdown hatane ke baad ab seedha credentials bhej rahe hain
       const response = await loginUser({
         mobile: credentials.mobile,
-        password: credentials.password,
-        role: credentials.role
+        password: credentials.password
       });
 
       const { user, token } = response.data;
@@ -28,22 +27,21 @@ const Login = () => {
         localStorage.setItem('token', token);
         localStorage.setItem('user', JSON.stringify(user));
         
-        alert(`Swagat hai, ${user.fullName}!`);
+        alert(`Welcome back, ${user.fullName}!`);
 
-        // --- 🚀 UPDATED ROLE-BASED REDIRECT LOGIC ---
-        // Yahan Accountant ka path add kar diya gaya hai
+        // --- 🚀 AUTO-REDIRECT BASED ON BACKEND ROLE ---
         const rolePaths = {
           'Admin': '/admin',
-          'User': '/user', // Advisor/Agent Dashboard
-          'Accountant': '/accountant/approval', // 🛡️ Naya Accountant Path
+          'User': '/user', 
+          'Accountant': '/accountant/approval', 
           'Customer': '/customer/dashboard'
         };
 
-        // Agar role match nahi hota toh home '/' par bhej dega
+        // Backend se jo role milega, wahan user redirect ho jayega
         navigate(rolePaths[user.role] || '/');
       }
     } catch (error) {
-      const errorMsg = typeof error === 'string' ? error : "Login Failed. Server unreachable.";
+      const errorMsg = typeof error === 'string' ? error : "Invalid Credentials or Server Error";
       alert(errorMsg);
     } finally {
       setLoading(false);
@@ -55,32 +53,16 @@ const Login = () => {
       <div style={loginCard}>
         <div style={{ textAlign: 'center', marginBottom: '35px' }}>
           <h1 style={logoStyle}>D-FINANCE</h1>
-          <p style={subTextStyle}>Mathura Branch | Cloud Secured</p>
+          <p style={subTextStyle}>Mathura Branch | Secure Cloud Access</p>
         </div>
 
         <form onSubmit={handleLogin}>
-          {/* --- Role Selection (Accountant Added) --- */}
-          <div style={inputGroup}>
-            <label style={labelStyle}>Login Role</label>
-            <select 
-              style={selectStyle}
-              value={credentials.role}
-              onChange={(e) => setCredentials({...credentials, role: e.target.value})}
-              disabled={loading}
-            >
-              <option value="Admin">System Administrator</option>
-              <option value="User">Advisor / Agent</option>
-              <option value="Accountant">Accountant / Finance Officer</option> {/* 🛡️ Added */}
-              <option value="Customer">Valued Customer</option>
-            </select>
-          </div>
-
           {/* --- Mobile Input --- */}
           <div style={inputGroup}>
             <label style={labelStyle}>Mobile Number</label>
             <input 
               type="text" 
-              placeholder="Registered Mobile Number" 
+              placeholder="Enter registered mobile" 
               style={inputField}
               required
               disabled={loading}
@@ -108,14 +90,14 @@ const Login = () => {
             disabled={loading} 
             style={loading ? {...btnStyle, background: '#94a3b8', cursor: 'not-allowed'} : btnStyle}
           >
-            {loading ? 'Verifying Identity...' : 'Sign In to Account'}
+            {loading ? 'Authenticating...' : 'Sign In'}
           </button>
         </form>
 
         <div style={footerStyle}>
-          <p style={{ fontSize: '14px', color: '#64748b', margin: 0 }}>
-            Don't have an account? <br/>
-            <Link to="/signup" style={linkStyle}>Contact Branch to Register</Link>
+          <p style={{ fontSize: '13px', color: '#64748b', margin: 0 }}>
+            Trouble logging in? <br/>
+            <Link to="/signup" style={linkStyle}>Register as a New Customer</Link>
           </p>
         </div>
       </div>
@@ -123,16 +105,15 @@ const Login = () => {
   );
 };
 
-// --- Styles (Fixed for consistent layout) ---
+// --- Styles (Clean & Professional) ---
 const pageWrapper = { height: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#0f172a', fontFamily: 'sans-serif' };
-const loginCard = { width: '100%', maxWidth: '420px', background: '#ffffff', padding: '45px', borderRadius: '24px', boxShadow: '0 25px 50px -12px rgba(0,0,0,0.5)' };
+const loginCard = { width: '100%', maxWidth: '400px', background: '#ffffff', padding: '45px', borderRadius: '32px', boxShadow: '0 25px 50px -12px rgba(0,0,0,0.5)' };
 const logoStyle = { color: '#2563eb', fontSize: '32px', fontWeight: '900', margin: 0, letterSpacing: '-1px' };
-const subTextStyle = { color: '#64748b', fontSize: '14px', marginTop: '8px' };
+const subTextStyle = { color: '#64748b', fontSize: '14px', marginTop: '8px', fontWeight: '500' };
 const inputGroup = { marginBottom: '20px' };
-const labelStyle = { display: 'block', fontSize: '12px', fontWeight: '800', color: '#475569', marginBottom: '8px', textTransform: 'uppercase' };
-const selectStyle = { width: '100%', padding: '12px', borderRadius: '12px', border: '2px solid #f1f5f9', outline: 'none', background: '#f8fafc', fontWeight: '600', boxSizing: 'border-box' };
-const inputField = { width: '100%', padding: '14px', borderRadius: '12px', border: '2px solid #f1f5f9', outline: 'none', boxSizing: 'border-box', background: '#f8fafc' };
-const btnStyle = { width: '100%', padding: '16px', background: '#2563eb', color: '#fff', border: 'none', borderRadius: '12px', fontWeight: '700', fontSize: '16px', cursor: 'pointer', boxShadow: '0 10px 15px -3px rgba(37, 99, 235, 0.4)' };
+const labelStyle = { display: 'block', fontSize: '11px', fontWeight: '800', color: '#475569', marginBottom: '8px', textTransform: 'uppercase' };
+const inputField = { width: '100%', padding: '14px', borderRadius: '12px', border: '2px solid #f1f5f9', outline: 'none', boxSizing: 'border-box', background: '#f8fafc', fontWeight: '600' };
+const btnStyle = { width: '100%', padding: '16px', background: '#2563eb', color: '#fff', border: 'none', borderRadius: '14px', fontWeight: '800', fontSize: '16px', cursor: 'pointer', boxShadow: '0 10px 15px -3px rgba(37, 99, 235, 0.4)', marginTop: '10px' };
 const footerStyle = { textAlign: 'center', marginTop: '30px', borderTop: '1px solid #f1f5f9', paddingTop: '20px' };
 const linkStyle = { color: '#2563eb', fontWeight: 'bold', textDecoration: 'none' };
 

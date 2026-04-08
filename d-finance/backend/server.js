@@ -14,7 +14,7 @@ const app = express();
 // --- 1. DATABASE & MIDDLEWARES ---
 connectDB();
 app.use(cors({ 
-    origin: ["http://localhost:5173", "https://d-finance-izsi.vercel.app"], 
+    origin: ["http://localhost:5173", "https://d-finance-izsi.vercel.app","https://dfinance.space"], 
     credentials: true 
 })); 
 app.use(express.json());
