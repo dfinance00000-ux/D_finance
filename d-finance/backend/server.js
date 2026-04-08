@@ -13,10 +13,17 @@ const app = express();
 
 // --- 1. DATABASE & MIDDLEWARES ---
 connectDB();
-app.use(cors({ 
-    origin: ["http://localhost:5173", "https://d-finance-izsi.vercel.app","https://dfinance.space"], 
-    credentials: true 
-})); 
+// --- server.js mein cors settings ---
+app.use(cors({
+  origin: [
+    "https://d-finance-izsi.vercel.app", 
+    "https://dfinance.space",            // Aapka custom domain
+    "http://localhost:5173"              // Local testing ke liye
+  ],
+  methods: ["GET", "POST", "PUT", "DELETE"],
+  credentials: true,
+  allowedHeaders: ["Content-Type", "Authorization"] // 👈 Ye add karna zaroori hai Preflight ke liye
+}));   
 app.use(express.json());
 
 // --- 2. AUTH MIDDLEWARE ---
