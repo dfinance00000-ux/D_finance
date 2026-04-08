@@ -13,14 +13,10 @@ const app = express();
 
 // --- 1. DATABASE & MIDDLEWARES ---
 connectDB();
-// const cors = require('cors');
-
-// Ye line aapke Vercel frontend ko permission degi
-app.use(cors({
-  origin: ["http://localhost:5173", "https://d-finance-izsi.vercel.app","https://dfinance.space"],
-  methods: ["GET", "POST", "PUT", "DELETE"],
-  credentials: true
-}));
+app.use(cors({ 
+    origin: ["http://localhost:5173", "https://d-finance-izsi.vercel.app","https://dfinance.space"], 
+    credentials: true 
+})); 
 app.use(express.json());
 
 // --- 2. AUTH MIDDLEWARE ---
