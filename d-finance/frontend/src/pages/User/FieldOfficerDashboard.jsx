@@ -12,33 +12,29 @@ const FieldOfficerDashboard = () => {
   const [loading, setLoading] = useState(true);
 
   // 🛠️ FETCH DATA FUNCTION
-const fetchOfficerData = async () => {
+  const fetchOfficerData = async () => {
     try {
       setLoading(true);
       
-      // Parallel API calls for performance
+      // Dono calls ko parallel mein kar rahe hain performance ke liye
       const [resStats, resPool] = await Promise.all([
-        API.get('/api/user/my-dashboard'), // Ensure prefix is correct
-        API.get('/api/officer/available-requests')
+        API.get('/user/my-dashboard'),
+        API.get('/officer/available-requests')
       ]);
 
-      // Statistics Update
       setStats({
-          // Backend se aa rahe real data ko map karein
-          totalSales: resStats.data.stats?.disbursedAmount || 0,
-          pendingCommission: resStats.data.stats?.totalCommission || 0,
-          teamSize: resStats.data.stats?.activeFilesCount || 0,
+          totalSales: resStats.data.totalSales || 0,
+          pendingCommission: resStats.data.pendingCommission || 0,
+          teamSize: resStats.data.teamSize || 0,
           recentSubmissions: resStats.data.recentSubmissions || []
       });
 
-      // Available Leads (Advisor Pool)
       setOpenPool(resPool.data || []);
-      
     } catch (err) {
-      console.error("❌ Sync Error:", err.response?.data?.error || err.message);
-      
+      console.error("❌ Sync Error:", err.response?.data || err.message);
+      // Agar 403 aaye toh user ko logout ya alert dikha sakte hain
       if(err.response?.status === 403) {
-          alert("Access Denied: Please Login again or check your Advisor role.");
+          console.warn("Access Denied: Check if your role is set to 'user' in DB");
       }
     } finally {
       setLoading(false);
@@ -47,9 +43,6 @@ const fetchOfficerData = async () => {
 
   useEffect(() => {
     fetchOfficerData();
-    // 🚀 Refresh data every 30 seconds to show live commissions
-    const interval = setInterval(fetchOfficerData, 30000);
-    return () => clearInterval(interval);
   }, []);
 
   // 🤝 ACCEPT LOAN LOGIC
