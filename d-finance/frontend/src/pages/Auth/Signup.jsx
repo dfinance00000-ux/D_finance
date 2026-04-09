@@ -1,16 +1,18 @@
 import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import { signupUser } from "../../api/authApi"; // Ensure this path is correct
+import { signupUser } from "../../api/authApi";
+import { FiPhone, FiArrowLeft, FiUser, FiMail, FiLock, FiEye, FiEyeOff, FiUsers } from 'react-icons/fi';
 
 const Signup = () => {
   const [loading, setLoading] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
   const [formData, setFormData] = useState({
     fullName: '',
     mobile: '',
     email: '',
     password: '',
-    role: 'Customer', // Default role
-    referredBy: ''    // Optional Advisor Code
+    role: 'Customer',
+    referredBy: ''
   });
 
   const navigate = useNavigate();
@@ -25,7 +27,6 @@ const Signup = () => {
     setLoading(true);
 
     try {
-      // Data cleaning: Email ko trim aur lower case karna
       const finalData = {
         ...formData,
         email: formData.email.toLowerCase().trim()
@@ -38,7 +39,6 @@ const Signup = () => {
         navigate('/login');
       }
     } catch (err) {
-      // Backend error handling
       const msg = err.response?.data?.error || "Registration Failed. Mobile might already exist.";
       alert(msg);
     } finally {
@@ -47,123 +47,169 @@ const Signup = () => {
   };
 
   return (
-    <div style={containerStyle}>
-      <div style={cardStyle}>
-        <div style={headerStyle}>
-          <h2 style={{ color: '#2563eb', margin: 0, fontWeight: '900', letterSpacing: '-1px' }}>D-FINANCE</h2>
-          <p style={subHeader}>Create Your Cloud Account</p>
+    <div style={pageWrapper}>
+      <style>{css}</style>
+      <div style={bgOverlay}></div>
+
+      <div style={loginCard}>
+        <div style={{ textAlign: 'center', marginBottom: '25px' }}>
+          <h1 style={welcomeStyle}>Join Us</h1>
+          <p style={subTitleStyle}>Create your cloud account</p>
         </div>
 
-        <form onSubmit={handleSignup}>
+        <form onSubmit={handleSignup} style={{ width: '100%' }}>
+          
           {/* Full Name */}
-          <div style={inputGroup}>
-            <label style={labelStyle}>Full Name</label>
-            <input 
-              type="text" 
-              name="fullName"
-              placeholder="Enter your full name" 
-              style={inputStyle} 
-              required 
-              value={formData.fullName}
-              onChange={handleInputChange} 
-            />
+          <div style={inputContainer}>
+            <input type="text" name="fullName" placeholder=" " style={inputField} required 
+              value={formData.fullName} onChange={handleInputChange} />
+            <label className="floating-label" style={floatingLabel}>Full Name</label>
+            <div style={lineStyle}></div>
           </div>
 
           {/* Role Selection */}
-          <div style={inputGroup}>
-            <label style={labelStyle}>I want to join as</label>
-            <select 
-              name="role"
-              style={selectStyle} 
-              value={formData.role} 
-              onChange={handleInputChange}
-            >
+          <div style={inputContainer}>
+            <select name="role" style={selectField} value={formData.role} onChange={handleInputChange}>
               <option value="Customer">Customer (Borrower)</option>
               <option value="User">Field Officer (Advisor)</option>
             </select>
+            <label style={fixedLabel}>Join As</label>
+            <div style={lineStyle}></div>
           </div>
 
           {/* Mobile Number */}
-          <div style={inputGroup}>
-            <label style={labelStyle}>Mobile Number</label>
-            <input 
-              type="text" 
-              name="mobile"
-              placeholder="10-digit mobile number" 
-              style={inputStyle} 
-              required 
-              maxLength="10"
-              value={formData.mobile}
-              onChange={handleInputChange} 
-            />
+          <div style={inputContainer}>
+            <input type="text" name="mobile" placeholder=" " style={inputField} required maxLength="10"
+              value={formData.mobile} onChange={handleInputChange} />
+            <label className="floating-label" style={floatingLabel}>Mobile Number</label>
+            <div style={lineStyle}></div>
           </div>
 
-          {/* Email (Optional but Recommended) */}
-          <div style={inputGroup}>
-            <label style={labelStyle}>Email Address</label>
-            <input 
-              type="email" 
-              name="email"
-              placeholder="example@mail.com" 
-              style={inputStyle} 
-              required
-              value={formData.email}
-              onChange={handleInputChange} 
-            />
+          {/* Email */}
+          <div style={inputContainer}>
+            <input type="email" name="email" placeholder=" " style={inputField} required 
+              value={formData.email} onChange={handleInputChange} />
+            <label className="floating-label" style={floatingLabel}>Email Address</label>
+            <div style={lineStyle}></div>
           </div>
 
-          {/* Password */}
-          <div style={inputGroup}>
-            <label style={labelStyle}>Create Password</label>
-            <input 
-              type="password" 
-              name="password"
-              placeholder="••••••••" 
-              style={inputStyle} 
-              required 
-              value={formData.password}
-              onChange={handleInputChange} 
-            />
+          {/* Password with Toggle */}
+          <div style={inputContainer}>
+            <input type={showPassword ? "text" : "password"} name="password" placeholder=" " style={inputField} required 
+              value={formData.password} onChange={handleInputChange} />
+            <label className="floating-label" style={floatingLabel}>Create Password</label>
+            <div style={eyeIconStyle} onClick={() => setShowPassword(!showPassword)}>
+              {showPassword ? <FiEyeOff size={18} /> : <FiEye size={18} />}
+            </div>
+            <div style={lineStyle}></div>
           </div>
 
-          {/* Referral Code (Optional) */}
-          <div style={inputGroup}>
-            <label style={labelStyle}>Advisor Referral Code (Optional)</label>
-            <input 
-              type="text" 
-              name="referredBy"
-              placeholder="e.g. ADV1001" 
-              style={inputStyle} 
-              value={formData.referredBy}
-              onChange={handleInputChange} 
-            />
+          {/* Referral Code */}
+          <div style={inputContainer}>
+            <input type="text" name="referredBy" placeholder=" " style={inputField} 
+              value={formData.referredBy} onChange={handleInputChange} />
+            <label className="floating-label" style={floatingLabel}>Advisor Code (Optional)</label>
+            <div style={lineStyle}></div>
           </div>
 
-          <button type="submit" disabled={loading} style={mainBtn}>
-            {loading ? 'Processing Registration...' : 'Create Account'}
+          <button type="submit" disabled={loading} style={btnStyle}>
+            {loading ? 'Processing...' : 'Create Account'}
           </button>
         </form>
 
-        <div style={footerStyle}>
-          <p style={{ fontSize: '14px', color: '#64748b' }}>
-            Already have an account? <Link to="/login" style={{color: '#2563eb', fontWeight: 'bold', textDecoration: 'none'}}>Sign In</Link>
-          </p>
+        <div style={linksContainer}>
+          <Link to="/login" style={footerLink}>
+            <FiArrowLeft /> Already have an account? Sign In
+          </Link>
         </div>
       </div>
+      <p style={branchTag}>D-Finance • Mathura Branch</p>
     </div>
   );
 };
 
-// --- Fintech Professional Styles ---
-const containerStyle = { height: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#0f172a', fontFamily: 'sans-serif' };
-const cardStyle = { width: '450px', background: '#fff', padding: '40px', borderRadius: '32px', boxShadow: '0 25px 50px -12px rgba(0,0,0,0.5)' };
-const headerStyle = { textAlign: 'center', marginBottom: '30px' };
-const subHeader = { fontSize: '10px', fontWeight: '900', color: '#94a3b8', letterSpacing: '1px', marginTop: '8px', textTransform: 'uppercase' };
-const inputGroup = { marginBottom: '15px' };
-const labelStyle = { display: 'block', fontSize: '11px', fontWeight: '800', color: '#475569', marginBottom: '8px', textTransform: 'uppercase' };
-const inputStyle = { width: '100%', padding: '14px', borderRadius: '12px', border: '2px solid #f1f5f9', outline: 'none', background: '#f8fafc', boxSizing: 'border-box' };
-const selectStyle = { ...inputStyle, fontWeight: '700', color: '#1e293b' };
-const mainBtn = { width: '100%', padding: '16px', background: '#2563eb', color: '#fff', border: 'none', borderRadius: '14px', fontWeight: '800', fontSize: '16px', cursor: 'pointer', marginTop: '10px', boxShadow: '0 10px 15px -3px rgba(37, 99, 235, 0.4)' };
-const footerStyle = { textAlign: 'center', marginTop: '25px', borderTop: '1px solid #f1f5f9', paddingTop: '20px' };
+// --- Updated Styles (Matching Login) ---
+const pageWrapper = {
+  height: '100vh', width: '100vw', display: 'flex', alignItems: 'center', justifyContent: 'center',
+  position: 'relative', overflowY: 'auto', padding: '20px 0',
+  backgroundImage: 'url("https://images.unsplash.com/photo-1497366216548-37526070297c?auto=format&fit=crop&w=1920&q=80")',
+  backgroundSize: 'cover', backgroundPosition: 'center',
+};
+
+const bgOverlay = {
+  position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
+  backgroundColor: 'rgba(255, 255, 255, 0.4)', backdropFilter: 'blur(8px)', zIndex: 0
+};
+
+const loginCard = {
+  position: 'relative', width: '90%', maxWidth: '450px', background: '#ffffff',
+  padding: '40px 35px', borderRadius: '24px', boxShadow: '0 20px 40px rgba(0,0,0,0.1)',
+  display: 'flex', flexDirection: 'column', alignItems: 'center', zIndex: 10,
+  maxHeight: '90vh', overflowY: 'auto'
+};
+
+const welcomeStyle = {
+  fontFamily: '"Apple Chancery", cursive', fontSize: '40px', color: '#5a6b8d', margin: 0
+};
+
+const subTitleStyle = {
+  fontSize: '12px', color: '#1a3a5a', fontWeight: 'bold', textTransform: 'uppercase', letterSpacing: '1px'
+};
+
+const inputContainer = { position: 'relative', width: '100%', marginBottom: '25px' };
+
+const inputField = {
+  width: '100%', border: 'none', padding: '10px 35px 10px 0', fontSize: '15px', outline: 'none',
+  background: 'transparent', color: '#333', position: 'relative', zIndex: 2, boxSizing: 'border-box'
+};
+
+const selectField = {
+  width: '100%', border: 'none', padding: '10px 0', fontSize: '15px', outline: 'none',
+  background: 'transparent', color: '#333', fontWeight: '600', cursor: 'pointer'
+};
+
+const floatingLabel = {
+  position: 'absolute', left: 0, top: '10px', color: '#999', pointerEvents: 'none', transition: '0.3s ease all'
+};
+
+const fixedLabel = {
+  position: 'absolute', left: 0, top: '-15px', color: '#c58296', fontSize: '11px', fontWeight: '800'
+};
+
+const lineStyle = { height: '1px', width: '100%', background: '#eee' };
+
+const eyeIconStyle = {
+  position: 'absolute', right: '0', top: '10px', cursor: 'pointer', color: '#999', zIndex: 3
+};
+
+const btnStyle = {
+  width: '100%', padding: '15px', background: '#c58296', color: '#fff', border: 'none',
+  borderRadius: '30px', fontSize: '14px', fontWeight: 'bold', cursor: 'pointer',
+  boxShadow: '0 8px 15px rgba(197, 130, 150, 0.3)', transition: '0.3s', textTransform: 'uppercase', marginTop: '10px'
+};
+
+const linksContainer = { marginTop: '20px' };
+const footerLink = { 
+  color: '#8e9aaf', fontSize: '13px', cursor: 'pointer', fontWeight: '600', 
+  display: 'flex', alignItems: 'center', gap: '5px', textDecoration: 'none' 
+};
+
+const branchTag = { position: 'fixed', bottom: '15px', fontSize: '10px', fontWeight: 'bold', color: '#5a6b8d', letterSpacing: '2px', zIndex: 10 };
+
+const css = `
+  @keyframes fadeIn { from { opacity: 0; transform: scale(0.9); } to { opacity: 1; transform: scale(1); } }
+  
+  /* Floating label hide logic */
+  input:focus ~ .floating-label,
+  input:not(:placeholder-shown) ~ .floating-label {
+    opacity: 0;
+    pointer-events: none;
+    transform: translateY(-10px);
+  }
+
+  /* Custom Scrollbar for the card */
+  div::-webkit-scrollbar { width: 5px; }
+  div::-webkit-scrollbar-thumb { background: #eee; border-radius: 10px; }
+`;
 
 export default Signup;

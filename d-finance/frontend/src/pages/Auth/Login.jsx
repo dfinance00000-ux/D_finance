@@ -1,48 +1,52 @@
 import React, { useState } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom'; // Link add kiya hai
 import { loginUser } from "../../api/authApi"; 
+import { FiPhone, FiArrowLeft, FiShield, FiLock, FiEye, FiEyeOff, FiUserPlus } from 'react-icons/fi';
 
 const Login = () => {
-  const [credentials, setCredentials] = useState({ 
-    mobile: '', 
-    password: '' 
-  });
+  const [credentials, setCredentials] = useState({ mobile: '', password: '', newPassword: '' });
   const [loading, setLoading] = useState(false);
+  const [mode, setMode] = useState('login'); 
+  const [showHelpline, setShowHelpline] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
   const navigate = useNavigate();
 
-  const handleLogin = async (e) => {
+  const handleAction = async (e) => {
     e.preventDefault();
     setLoading(true);
 
+    if (mode === 'forgot') {
+      setTimeout(() => {
+        alert(`Verification code sent to ${credentials.mobile}`);
+        setMode('reset');
+        setLoading(false);
+      }, 1500);
+      return;
+    }
+
+    if (mode === 'reset') {
+      alert("Password updated successfully! You can now login.");
+      setMode('login');
+      setLoading(false);
+      return;
+    }
+
     try {
-      // Role selection dropdown hatane ke baad ab seedha credentials bhej rahe hain
-      const response = await loginUser({
-        mobile: credentials.mobile,
-        password: credentials.password
-      });
-
+      const response = await loginUser({ mobile: credentials.mobile, password: credentials.password });
       const { user, token } = response.data;
-
       if (token) {
         localStorage.setItem('token', token);
         localStorage.setItem('user', JSON.stringify(user));
-        
-        alert(`Welcome back, ${user.fullName}!`);
-
-        // --- 🚀 AUTO-REDIRECT BASED ON BACKEND ROLE ---
-        const rolePaths = {
-          'Admin': '/admin',
+        const rolePaths = { 
+          'Admin': '/admin', 
           'User': '/user', 
           'Accountant': '/accountant/approval', 
-          'Customer': '/customer/dashboard'
+          'Customer': '/customer/dashboard' 
         };
-
-        // Backend se jo role milega, wahan user redirect ho jayega
         navigate(rolePaths[user.role] || '/');
       }
     } catch (error) {
-      const errorMsg = typeof error === 'string' ? error : "Invalid Credentials or Server Error";
-      alert(errorMsg);
+      alert("Invalid Credentials or Server Error");
     } finally {
       setLoading(false);
     }
@@ -50,71 +54,185 @@ const Login = () => {
 
   return (
     <div style={pageWrapper}>
+      <style>{css}</style>
+      <div style={bgOverlay}></div>
+
       <div style={loginCard}>
-        <div style={{ textAlign: 'center', marginBottom: '35px' }}>
-          <h1 style={logoStyle}>D-FINANCE</h1>
-          <p style={subTextStyle}>Mathura Branch | Secure Cloud Access</p>
+        {showHelpline && (
+            <div style={helplinePopup} onClick={() => setShowHelpline(false)}>
+                <div style={popupContent}>
+                    <FiPhone size={24} color="#c58296" />
+                    <h3 style={{margin: '10px 0'}}>Support Desk</h3>
+                    <a href="tel:+918935060000" style={phoneNum}>89350 60000</a>
+                    <p style={{fontSize: '10px', color: '#999', marginTop: '10px'}}>Click number to call</p>
+                </div>
+            </div>
+        )}
+
+        <div style={{ textAlign: 'center', marginBottom: '30px' }}>
+          <h1 style={welcomeStyle}>Welcome</h1>
+          <p style={subTitleStyle}>
+            {mode === 'login' && 'Login to continue'}
+            {mode === 'forgot' && 'Account Recovery'}
+            {mode === 'reset' && 'Set New Password'}
+          </p>
         </div>
 
-        <form onSubmit={handleLogin}>
-          {/* --- Mobile Input --- */}
-          <div style={inputGroup}>
-            <label style={labelStyle}>Mobile Number</label>
-            <input 
-              type="text" 
-              placeholder="Enter registered mobile" 
-              style={inputField}
-              required
-              disabled={loading}
-              value={credentials.mobile}
-              onChange={(e) => setCredentials({...credentials, mobile: e.target.value})}
-            />
-          </div>
+        <form onSubmit={handleAction} style={{ width: '100%' }}>
+          {mode !== 'reset' && (
+            <div style={inputContainer}>
+                <input type="text" placeholder=" " style={inputField} required value={credentials.mobile}
+                onChange={(e) => setCredentials({...credentials, mobile: e.target.value})} />
+                <label className="floating-label" style={floatingLabel}>SSO ID / Mobile</label>
+                <div style={lineStyle}></div>
+            </div>
+          )}
 
-          {/* --- Password Input --- */}
-          <div style={inputGroup}>
-            <label style={labelStyle}>Password</label>
-            <input 
-              type="password" 
-              placeholder="••••••••" 
-              style={inputField}
-              required
-              disabled={loading}
-              value={credentials.password}
-              onChange={(e) => setCredentials({...credentials, password: e.target.value})}
-            />
-          </div>
+          {mode === 'login' && (
+            <div style={inputContainer}>
+              <input 
+                type={showPassword ? "text" : "password"} 
+                placeholder=" " 
+                style={inputField} 
+                required 
+                value={credentials.password}
+                onChange={(e) => setCredentials({...credentials, password: e.target.value})} 
+              />
+              <label className="floating-label" style={floatingLabel}>Password</label>
+              
+              <div style={eyeIconStyle} onClick={() => setShowPassword(!showPassword)}>
+                {showPassword ? <FiEyeOff size={18} /> : <FiEye size={18} />}
+              </div>
+              
+              <div style={lineStyle}></div>
+            </div>
+          )}
 
-          <button 
-            type="submit" 
-            disabled={loading} 
-            style={loading ? {...btnStyle, background: '#94a3b8', cursor: 'not-allowed'} : btnStyle}
-          >
-            {loading ? 'Authenticating...' : 'Sign In'}
+          {mode === 'reset' && (
+            <div style={inputContainer}>
+              <input 
+                type={showPassword ? "text" : "password"} 
+                placeholder=" " 
+                style={inputField} 
+                required 
+                value={credentials.newPassword}
+                onChange={(e) => setCredentials({...credentials, newPassword: e.target.value})} 
+              />
+              <label className="floating-label" style={floatingLabel}>New Password</label>
+              
+              <div style={eyeIconStyle} onClick={() => setShowPassword(!showPassword)}>
+                {showPassword ? <FiEyeOff size={18} /> : <FiEye size={18} />}
+              </div>
+
+              <div style={lineStyle}></div>
+            </div>
+          )}
+
+          <button type="submit" disabled={loading} style={btnStyle}>
+            {loading ? 'Processing...' : 
+             mode === 'login' ? 'Submit' : 
+             mode === 'forgot' ? 'Send Reset Code' : 'Update Password'}
           </button>
         </form>
 
-        <div style={footerStyle}>
-          <p style={{ fontSize: '13px', color: '#64748b', margin: 0 }}>
-            Trouble logging in? <br/>
-            <Link to="/signup" style={linkStyle}>Register as a New Customer</Link>
-          </p>
+        <div style={linksContainer}>
+          {mode === 'login' ? (
+              <div style={bottomLinks}>
+                <span onClick={() => setMode('forgot')} style={footerLink}>Forgot Password?</span>
+                <div style={divider}></div>
+                <Link to="/signup" style={footerLink}><FiUserPlus /> Create Account</Link>
+              </div>
+          ) : (
+              <span onClick={() => setMode('login')} style={footerLink}><FiArrowLeft /> Back to Login</span>
+          )}
+
+          <div style={helpBtn} onClick={() => setShowHelpline(true)}>
+            <FiPhone /> Call to Help
+          </div>
         </div>
       </div>
+      <p style={branchTag}>D-Finance • Mathura Branch</p>
     </div>
   );
 };
 
-// --- Styles (Clean & Professional) ---
-const pageWrapper = { height: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#0f172a', fontFamily: 'sans-serif' };
-const loginCard = { width: '100%', maxWidth: '400px', background: '#ffffff', padding: '45px', borderRadius: '32px', boxShadow: '0 25px 50px -12px rgba(0,0,0,0.5)' };
-const logoStyle = { color: '#2563eb', fontSize: '32px', fontWeight: '900', margin: 0, letterSpacing: '-1px' };
-const subTextStyle = { color: '#64748b', fontSize: '14px', marginTop: '8px', fontWeight: '500' };
-const inputGroup = { marginBottom: '20px' };
-const labelStyle = { display: 'block', fontSize: '11px', fontWeight: '800', color: '#475569', marginBottom: '8px', textTransform: 'uppercase' };
-const inputField = { width: '100%', padding: '14px', borderRadius: '12px', border: '2px solid #f1f5f9', outline: 'none', boxSizing: 'border-box', background: '#f8fafc', fontWeight: '600' };
-const btnStyle = { width: '100%', padding: '16px', background: '#2563eb', color: '#fff', border: 'none', borderRadius: '14px', fontWeight: '800', fontSize: '16px', cursor: 'pointer', boxShadow: '0 10px 15px -3px rgba(37, 99, 235, 0.4)', marginTop: '10px' };
-const footerStyle = { textAlign: 'center', marginTop: '30px', borderTop: '1px solid #f1f5f9', paddingTop: '20px' };
-const linkStyle = { color: '#2563eb', fontWeight: 'bold', textDecoration: 'none' };
+// --- Styles ---
+const pageWrapper = {
+  height: '100vh', width: '100vw', display: 'flex', alignItems: 'center', justifyContent: 'center',
+  position: 'relative', overflow: 'hidden',
+  backgroundImage: 'url("https://images.unsplash.com/photo-1497366216548-37526070297c?auto=format&fit=crop&w=1920&q=80")',
+  backgroundSize: 'cover', backgroundPosition: 'center',
+};
+
+const bgOverlay = {
+  position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
+  backgroundColor: 'rgba(255, 255, 255, 0.4)', backdropFilter: 'blur(8px)'
+};
+
+const loginCard = {
+  position: 'relative', width: '90%', maxWidth: '400px', background: '#ffffff',
+  padding: '50px 35px', borderRadius: '24px', boxShadow: '0 20px 40px rgba(0,0,0,0.1)',
+  display: 'flex', flexDirection: 'column', alignItems: 'center', zIndex: 10
+};
+
+const welcomeStyle = {
+  fontFamily: '"Apple Chancery", cursive', fontSize: '48px', color: '#5a6b8d', margin: 0
+};
+
+const subTitleStyle = {
+  fontSize: '14px', color: '#1a3a5a', fontWeight: 'bold', textTransform: 'uppercase', letterSpacing: '1px'
+};
+
+const inputContainer = { position: 'relative', width: '100%', marginBottom: '30px' };
+const inputField = {
+  width: '100%', border: 'none', padding: '10px 35px 10px 0', fontSize: '16px', outline: 'none',
+  background: 'transparent', color: '#333', position: 'relative', zIndex: 2, boxSizing: 'border-box'
+};
+
+const eyeIconStyle = {
+  position: 'absolute', right: '0', top: '10px', cursor: 'pointer', color: '#999', zIndex: 3
+};
+
+const floatingLabel = {
+  position: 'absolute', left: 0, top: '10px', color: '#999', pointerEvents: 'none', transition: '0.2s ease all'
+};
+const lineStyle = { height: '1px', width: '100%', background: '#eee' };
+
+const btnStyle = {
+  width: '100%', padding: '15px', background: '#c58296', color: '#fff', border: 'none',
+  borderRadius: '30px', fontSize: '14px', fontWeight: 'bold', cursor: 'pointer',
+  boxShadow: '0 8px 15px rgba(197, 130, 150, 0.3)', transition: '0.3s', textTransform: 'uppercase'
+};
+
+const linksContainer = { marginTop: '25px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '20px', width: '100%' };
+const bottomLinks = { display: 'flex', alignItems: 'center', gap: '15px', justifyContent: 'center' };
+const divider = { height: '12px', width: '1px', background: '#ddd' };
+const footerLink = { color: '#8e9aaf', fontSize: '13px', cursor: 'pointer', fontWeight: '600', display: 'flex', alignItems: 'center', gap: '5px', textDecoration: 'none' };
+
+const helpBtn = {
+    display: 'flex', alignItems: 'center', gap: '10px', padding: '10px 20px', 
+    background: '#f8fafc', borderRadius: '12px', border: '1px solid #e2e8f0',
+    fontSize: '13px', fontWeight: 'bold', color: '#1a3a5a', cursor: 'pointer'
+};
+
+const helplinePopup = {
+    position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, 
+    background: 'rgba(255,255,255,0.9)', zIndex: 100, display: 'flex', 
+    alignItems: 'center', justifyContent: 'center', borderRadius: '24px'
+};
+
+const popupContent = { textAlign: 'center', animation: 'fadeIn 0.3s ease' };
+const phoneNum = { fontSize: '24px', fontWeight: '900', color: '#1a3a5a', textDecoration: 'none', borderBottom: '2px solid #c58296' };
+const branchTag = { position: 'absolute', bottom: '20px', fontSize: '10px', fontWeight: 'bold', color: '#5a6b8d', letterSpacing: '2px', zIndex: 10 };
+
+const css = `
+  @keyframes fadeIn { from { opacity: 0; transform: scale(0.9); } to { opacity: 1; transform: scale(1); } }
+  input:focus ~ .floating-label,
+  input:not(:placeholder-shown) ~ .floating-label {
+    opacity: 0;
+    pointer-events: none;
+    transform: translateY(-10px);
+  }
+`;
 
 export default Login;
