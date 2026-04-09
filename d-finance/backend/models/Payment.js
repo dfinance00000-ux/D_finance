@@ -1,56 +1,67 @@
 const mongoose = require('mongoose');
 
 const PaymentSchema = new mongoose.Schema({
-  // Unique Receipt Number (e.g., RCPT-992831)
-  receiptId: { 
+  // 🔥 Har payment ka unique track rakhne ke liye
+  paymentId: { 
     type: String, 
     unique: true, 
-    required: true 
+    required: true,
+    default: () => "PAY-" + Math.floor(100000 + Math.random() * 900000) // Auto-generate if not provided
   },
-  
-  // Link to Loan & Customer
-  loanId: { type: String, required: true }, // DF-102710
+
+  // --- 🔗 Linking ---
+  loanId: { 
+    type: String, 
+    required: true,
+    index: true 
+  },
   customerId: { 
     type: mongoose.Schema.Types.ObjectId, 
     ref: 'User', 
     required: true 
   },
-  customerName: String,
+  customerName: { 
+    type: String 
+  },
 
-  // Payment Details
-  amount: { type: Number, required: true },
-  paymentType: { 
+  // --- 💰 Transaction Details ---
+  amount: { 
+    type: Number, 
+    required: true 
+  },
+  utr: { 
     type: String, 
-    enum: ['EMI', 'Late Fee', 'File Charge', 'Foreclosure'], 
-    default: 'EMI' 
-  },
-  
-  // Mode of Payment
-  method: { 
-    type: String, 
-    enum: ['Online', 'Cash', 'UPI', 'Cheque'], 
-    default: 'Online' 
+    required: true, 
+    unique: true, // Ek UTR do baar use nahi ho sakta
+    trim: true 
   },
 
-  // Razorpay Specific (Online ke liye)
-  razorpay_order_id: String,
-  razorpay_payment_id: String,
-  razorpay_signature: String,
-
-  // Collector Info (Agar cash collection ho toh)
-  collectedBy: { 
-    type: mongoose.Schema.Types.ObjectId, 
-    ref: 'User' 
-  },
-
+  // --- 🚦 Status & Verification ---
   status: { 
     type: String, 
-    enum: ['Success', 'Failed', 'Pending', 'Refunded'], 
+    enum: ['Pending', 'Approved', 'Rejected'], 
     default: 'Pending' 
   },
 
-  paymentDate: { type: Date, default: Date.now },
-  remarks: String
+  // --- 📸 Evidence ---
+  screenshot: { 
+    type: String // Base64 Receipt
+  },
+
+  // --- 🗓️ Timing ---
+  paymentDate: { 
+    type: Date, 
+    default: Date.now 
+  },
+  verifiedAt: { 
+    type: Date 
+  },
+  verifiedBy: { 
+    type: String // Admin Name
+  }
+}, { 
+  timestamps: true 
 });
 
+// Purane indexes delete karne ke liye aur naye model ko export karne ke liye
 module.exports = mongoose.models.Payment || mongoose.model('Payment', PaymentSchema);

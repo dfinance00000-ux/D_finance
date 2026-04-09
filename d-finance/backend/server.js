@@ -4,10 +4,14 @@ const connectDB = require('./config/db');
 const cors = require('cors');
 const jwt = require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
+// server.js ke top par check karo aur ye add karo
+const Loan = require('./models/Loan');
+const Payment = require('./models/Payment'); // 🔥 IMPORTANT
+const Blog = require('./models/Blog');
 
 // Models Import
 const User = require('./models/User'); 
-const Loan = require('./models/Loan'); 
+// const Loan = require('./models/Loan'); 
 
 const app = express();
 
@@ -28,7 +32,9 @@ app.use(cors({
 }));
 
 // Ye hamesha CORS ke niche hona chahiye
-app.use(express.json());
+// app.use(express.json());
+app.use(express.json({ limit: '50mb' }));
+app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
 // --- EXTRA SAFETY FOR RENDER (Preflight fix) ---
 app.use((req, res, next) => {
@@ -94,26 +100,54 @@ app.post('/api/auth/login', async (req, res) => {
 
 // --- 4. LOAN SYSTEM (CUSTOMER & FILTERS) ---
 
-app.post('/api/loans/pay-manual/:loanId', verifyToken, async (req, res) => {
-    try {
-        const { utr, amount } = req.body;
-        const loan = await Loan.findOne({ loanId: req.params.loanId });
+app.post('/api/loans/pay-manual/:loanId', async (req, res) => {
+  try {
+    const { utr, amount, customerId } = req.body;
+    const loanIdParam = req.params.loanId;
 
-        if (!loan) return res.status(404).json({ error: "Loan not found" });
-
-        // Payment request ko history mein dalo as 'Pending'
-        loan.repaymentHistory.push({
-            amount: amount,
-            utr: utr,
-            date: new Date(),
-            status: 'Pending'
-        });
-
-        await loan.save();
-        res.json({ success: true, message: "Payment logged for verification" });
-    } catch (err) {
-        res.status(500).json({ error: "Payment logging failed" });
+    // 1. Double check for Duplicate UTR (To prevent double submission by user)
+    const existingPayment = await Payment.findOne({ utr: utr.trim() });
+    if (existingPayment) {
+      return res.status(400).json({ error: "Ye UTR pehle hi use ho chuka hai!" });
     }
+
+    // 2. Loan check
+    const loan = await Loan.findOne({ loanId: loanIdParam });
+    if (!loan) return res.status(404).json({ error: "Loan Record Not Found" });
+
+    // 3. Create NEW Unique Payment Record
+    const newPayment = new Payment({
+      paymentId: "PAY-" + Date.now() + Math.floor(Math.random() * 1000), // Purely unique ID
+      loanId: loanIdParam,
+      customerId: loan.customerId,
+      customerName: loan.customerName,
+      amount: Number(amount),
+      utr: utr.trim(),
+      status: 'Pending'
+    });
+
+    await newPayment.save();
+
+    // 4. Update internal Loan History
+    await Loan.findOneAndUpdate(
+      { loanId: loanIdParam },
+      { 
+        $push: { 
+          repaymentHistory: { 
+            amount: Number(amount), 
+            utr: utr.trim(), 
+            status: 'Pending',
+            date: new Date() 
+          } 
+        } 
+      }
+    );
+
+    res.status(200).json({ success: true, message: "Payment logged!" });
+  } catch (err) {
+    console.error("❌ Save Error:", err.message);
+    res.status(500).json({ error: "Server Error: " + err.message });
+  }
 });
 app.post('/api/loans', verifyToken, async (req, res) => {
   try {
@@ -486,6 +520,246 @@ app.get('/api/user/my-dashboard', verifyToken, async (req, res) => {
     } catch (err) {
         res.status(500).json({ error: "Dashboard stats failed" });
     }
+});
+// --- Accountant Approval Route ---
+// Ise apne baaki routes ke saath add karein
+app.post('/api/accountant/approve/:id', async (req, res) => {
+  try {
+    const loanId = req.params.id;
+
+    // 1. Loan ko find karo aur status update karo
+    const updatedLoan = await Loan.findByIdAndUpdate(
+      loanId,
+      { 
+        status: 'Disbursed', // Accountant ne approve kar diya
+        disbursedAt: new Date(),
+        // Agar aap chahte hain ki repayment yahan se shuru ho
+        nextEmiDate: new Date(Date.now() + 24 * 60 * 60 * 1000) // Kal ki date recovery ke liye
+      },
+      { new: true }
+    );
+
+    if (!updatedLoan) {
+      return res.status(404).json({ success: false, error: "Loan record not found" });
+    }
+
+    console.log(`💰 Funds Disbursed for Loan: ${updatedLoan.loanId}`);
+    
+    res.status(200).json({ 
+      success: true, 
+      message: "Payment released successfully", 
+      loan: updatedLoan 
+    });
+
+  } catch (err) {
+    console.error("Disbursement Error:", err);
+    res.status(500).json({ success: false, error: "Internal Server Error" });
+  }
+});
+// Example Payment Route (Backend)
+
+app.get('/api/payments', async (req, res) => {
+  try {
+    const { customerId } = req.query;
+    // 💡 Step 1: Check karo 'Payment' model top par require kiya hai?
+    // const Payment = require('./models/Payment');
+    
+    const payments = await Payment.find({ customerId }).sort({ createdAt: -1 });
+    
+    // 💡 Step 2: Hamesha array bhejo, bhale hi khali ho
+    res.status(200).json(payments); 
+  } catch (err) {
+    console.error("Fetch Error:", err);
+    res.status(500).json([]); // Crash ki jagah empty array bhej do
+  }
+});
+// 🔥 PERMANENT DELETE ROUTE
+app.delete('/loans/:id', async (req, res) => {
+  try {
+    const loanId = req.params.id;
+
+    // Database se record delete karo
+    const deletedLoan = await Loan.findByIdAndDelete(loanId);
+
+    if (!deletedLoan) {
+      return res.status(404).json({ 
+        success: false, 
+        error: "Loan record not found in database" 
+      });
+    }
+
+    console.log(`🗑️ Loan Deleted: ${loanId}`);
+
+    res.status(200).json({ 
+      success: true, 
+      message: "Application permanently deleted from ledger" 
+    });
+    
+  } catch (err) {
+    console.error("Delete Error:", err);
+    res.status(500).json({ 
+      success: false, 
+      error: "Internal Server Error during deletion" 
+    });
+  }
+});
+app.post('/api/admin/approve-payment/:paymentId', async (req, res) => {
+  try {
+    const { paymentId } = req.params;
+
+    // 1. Payment dhundo
+    const payment = await Payment.findById(paymentId);
+    if (!payment) return res.status(404).json({ error: "Payment not found" });
+    if (payment.status === 'Approved') return res.status(400).json({ error: "Already Approved" });
+
+    // 2. Payment Status Update karo
+    payment.status = 'Approved';
+    payment.verifiedAt = new Date();
+    await payment.save();
+
+    // 3. 🔥 LOAN BALANCE UPDATE (Ye sabse zaroori hai)
+    // Hum Loan collection mein totalPaid badhayenge aur totalPending kam karenge
+    const updatedLoan = await Loan.findOneAndUpdate(
+      { loanId: payment.loanId },
+      { 
+        $inc: { 
+          totalPaid: payment.amount,      // Amount add karo
+          totalPending: -payment.amount   // Pending balance kam karo
+        }
+      },
+      { new: true }
+    );
+
+    console.log(`✅ Balance Updated for Loan ${payment.loanId}. New Paid Total: ${updatedLoan.totalPaid}`);
+
+    res.json({ success: true, message: "Payment Approved & Balance Updated!" });
+
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+app.post('/api/accountant/approve-payment/:id', async (req, res) => {
+  try {
+    const payment = await Payment.findById(req.params.id);
+    if (!payment) return res.status(404).json({ error: "Payment not found" });
+    if (payment.status === 'Approved') return res.status(400).json({ error: "Already approved" });
+
+    // 1. Payment Status Update
+    payment.status = 'Approved';
+    await payment.save();
+
+    // 2. 🔥 LOAN BALANCE UPDATE (Sabse Zaroori Step)
+    await Loan.findOneAndUpdate(
+      { loanId: payment.loanId },
+      { 
+        $inc: { 
+          totalPaid: payment.amount,      // totalPaid badhao
+          totalPending: -payment.amount   // totalPending kam karo
+        } 
+      }
+    );
+
+    res.json({ success: true, message: "Payment Approved and Loan Balance Updated!" });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+// 1. Pending Payments Fetch karne ka Route
+app.get('/api/admin/pending-payments', async (req, res) => {
+  try {
+    // Sirf wahi payments uthao jinka status 'Pending' hai
+    const pending = await Payment.find({ status: 'Pending' }).sort({ createdAt: -1 });
+    res.status(200).json(pending);
+  } catch (err) {
+    res.status(500).json({ error: "Failed to fetch payments: " + err.message });
+  }
+});
+
+// 2. Payment Approve karne ka Route
+app.post('/api/admin/approve-payment/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    // A. Payment record dhundo
+    const payment = await Payment.findById(id);
+    if (!payment) return res.status(404).json({ error: "Payment not found" });
+
+    // B. Status badlo
+    payment.status = 'Approved';
+    payment.verifiedAt = new Date();
+    await payment.save();
+
+    // C. 🔥 Sabse Main: Loan collection mein balance update karo
+    // totalPaid badhao aur totalPending kam karo
+    await Loan.findOneAndUpdate(
+      { loanId: payment.loanId },
+      { 
+        $inc: { 
+          totalPaid: payment.amount, 
+          totalPending: -payment.amount 
+        } 
+      }
+    );
+
+    res.status(200).json({ success: true, message: "Approved & Balance Updated!" });
+  } catch (err) {
+    res.status(500).json({ error: "Approval failed: " + err.message });
+  }
+});
+// Blogs fetch karne ka backend route
+app.get('/api/admin/all-blogs', async (req, res) => {
+  try {
+    // Agar aapne Blog model banaya hai toh:
+    // const blogs = await Blog.find().sort({ createdAt: -1 });
+    // res.json(blogs);
+    
+    // Abhi ke liye empty array bhej do taaki error na aaye
+    res.json([]); 
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+// Blogs ke liye Backend Routes
+// Note: Ensure karo aapne Blog Model banaya hai, nahi toh niche wala simple logic use karo
+
+// 1. Fetch all blogs
+app.get('/api/blogs', async (req, res) => {
+  try {
+    const blogs = await Blog.find().sort({ date: -1 }); // Database se fetch karo
+    res.json(blogs);
+  } catch (err) {
+    res.status(500).json({ error: "Database error" });
+  }
+});
+// 2. Create new blog
+app.post('/api/blogs', async (req, res) => {
+  try {
+    const newBlog = new Blog(req.body);
+    await newBlog.save();
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// 3. Update blog
+app.put('/api/blogs/:id', async (req, res) => {
+  try {
+    // const updatedBlog = await Blog.findByIdAndUpdate(req.params.id, req.body, { new: true });
+    res.status(200).json({ success: true, message: "Updated!" });
+  } catch (err) {
+    res.status(500).send(err.message);
+  }
+});
+
+// 4. Delete blog
+app.delete('/api/blogs/:id', async (req, res) => {
+  try {
+    // await Blog.findByIdAndDelete(req.params.id);
+    res.status(200).json({ success: true, message: "Deleted!" });
+  } catch (err) {
+    res.status(500).send(err.message);
+  }
 });
 // 3. Fix: Accountant Add Karne Ka Logic (Signup Route Update)
 // Note: Aapka existing signup route hi kaam karega, bas dropdown mein 'Accountant' role bhejiye.

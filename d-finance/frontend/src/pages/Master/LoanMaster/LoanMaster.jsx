@@ -1,102 +1,117 @@
-import React, { useState } from 'react';
-import { FiDollarSign, FiPercent, FiCalendar, FiPieChart, FiArrowDownCircle, FiInfo } from 'react-icons/fi';
+import React, { useState, useEffect, useCallback } from 'react';
+import { 
+  FiDollarSign, FiPercent, FiCalendar, FiPieChart, 
+  FiArrowRight, FiInfo, FiTrendingUp, FiActivity, FiAlertCircle, FiClock
+} from 'react-icons/fi';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts';
 
 const LoanMaster = () => {
-  const [loanData, setLoanData] = useState({ principal: '', rate: '', tenure: '' });
+  const [loanData, setLoanData] = useState({ 
+    principal: 10000, 
+    months: 1, 
+    delayWeeks: 0 
+  });
   const [result, setResult] = useState(null);
   const [schedule, setSchedule] = useState([]);
 
-  const calculateEMI = () => {
+  const calculateFinance = useCallback(() => {
     const P = parseFloat(loanData.principal);
-    const R = parseFloat(loanData.rate) / 12 / 100;
-    const N = parseInt(loanData.tenure);
+    const M = parseInt(loanData.months);
+    const W = parseInt(loanData.delayWeeks) || 0;
 
-    if (P > 0 && R > 0 && N > 0) {
-      const emi = (P * R * Math.pow(1 + R, N)) / (Math.pow(1 + R, N) - 1);
-      const totalPayable = emi * N;
-      const totalInterest = totalPayable - P;
+    if (P >= 10000 && M > 0) {
+      // --- Calculations as per your formula ---
+      const processingFee = P * 0.02;
+      const monthlyInterestTotal = P * 0.10 * M;
+      const delayPenalty = P * 0.10 * W;
+      
+      const totalPayable = P + monthlyInterestTotal + processingFee + delayPenalty;
+      const emi = totalPayable / M;
 
       setResult({
         emi: emi.toFixed(0),
-        totalInterest: totalInterest.toFixed(0),
+        processingFee: processingFee.toFixed(0),
+        interest: monthlyInterestTotal.toFixed(0),
+        penalty: delayPenalty.toFixed(0),
         totalPayable: totalPayable.toFixed(0),
         chartData: [
-          { name: 'Principal', value: P, color: '#0f172a' },
-          { name: 'Interest', value: totalInterest, color: '#c58296' }
+          { name: 'Principal', value: P, color: '#6366f1' },
+          { name: 'Interest', value: monthlyInterestTotal, color: '#10b981' },
+          { name: 'Charges/Penalty', value: processingFee + delayPenalty, color: '#f43f5e' }
         ]
       });
 
-      // Schedule Generation
-      let currentBalance = P;
+      // --- Installment Ledger ---
       let tempSchedule = [];
-      for (let i = 1; i <= N; i++) {
-        const interest = currentBalance * R;
-        const principalPaid = emi - interest;
-        currentBalance = currentBalance - principalPaid;
+      for (let i = 1; i <= M; i++) {
         tempSchedule.push({
           month: i,
-          emi: emi.toFixed(0),
-          principal: principalPaid.toFixed(0),
-          interest: interest.toFixed(0),
-          balance: Math.max(0, currentBalance).toFixed(0)
+          installment: emi.toFixed(0),
+          // Ledger shows flat distribution for simple interest business model
+          principalPart: (P / M).toFixed(0),
+          interestPart: (monthlyInterestTotal / M).toFixed(0),
+          penaltyPart: (delayPenalty / M).toFixed(0)
         });
       }
       setSchedule(tempSchedule);
-    } else {
-      alert("Bhai, saari details sahi se fill karo.");
     }
-  };
+  }, [loanData]);
+
+  useEffect(() => {
+    calculateFinance();
+  }, [calculateFinance]);
 
   return (
     <div style={containerStyle}>
-      {/* --- HUD: HEADER --- */}
+      {/* --- HEADER --- */}
       <div style={headerStyle}>
-        <h2 style={{ margin: 0, fontWeight: 900, color: '#0f172a' }}>💰 LOAN ANALYTICS ENGINE</h2>
-        <p style={{ color: '#64748b', fontSize: '12px', fontWeight: 'bold', textTransform: 'uppercase' }}>Advanced Amortization Scheduler</p>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
+            <div style={logoBadge}><FiActivity size={24} /></div>
+            <div>
+                <h2 style={mainTitle}>FINANCE ANALYTICS ENGINE</h2>
+                <p style={subTitleText}>P + (10% Month) + (2% Process) + (10% Weekly Delay)</p>
+            </div>
+        </div>
       </div>
 
       <div style={mainGrid}>
-        {/* --- LEFT: CALCULATOR INPUT --- */}
+        {/* --- INPUTS --- */}
         <div style={cardStyle}>
-          <h3 style={cardTitle}><FiInfo /> Input Parameters</h3>
+          <h3 style={cardTitle}><FiTrendingUp /> Loan Parameters</h3>
           <div style={inputGroup}>
             <div style={inputBox}>
-              <label style={labelStyle}>Principal Amount (₹)</label>
-              <div style={fieldWrapper}>
-                <FiDollarSign style={iconStyle} />
-                <input type="number" placeholder="1,00,000" style={inputStyle} value={loanData.principal} onChange={(e) => setLoanData({...loanData, principal: e.target.value})} />
-              </div>
+                <label style={labelStyle}>Loan Principal (Min ₹10,000)</label>
+                <input type="number" style={inputStyle} value={loanData.principal} 
+                    onChange={(e) => setLoanData({...loanData, principal: e.target.value})} />
             </div>
 
             <div style={inputBox}>
-              <label style={labelStyle}>Interest Rate (% P.A.)</label>
-              <div style={fieldWrapper}>
-                <FiPercent style={iconStyle} />
-                <input type="number" placeholder="12" style={inputStyle} value={loanData.rate} onChange={(e) => setLoanData({...loanData, rate: e.target.value})} />
-              </div>
+                <label style={labelStyle}>Tenure (Total Months)</label>
+                <input type="number" style={inputStyle} value={loanData.months} 
+                    onChange={(e) => setLoanData({...loanData, months: e.target.value})} />
             </div>
 
             <div style={inputBox}>
-              <label style={labelStyle}>Tenure (Months)</label>
-              <div style={fieldWrapper}>
-                <FiCalendar style={iconStyle} />
-                <input type="number" placeholder="12" style={inputStyle} value={loanData.tenure} onChange={(e) => setLoanData({...loanData, tenure: e.target.value})} />
-              </div>
+                <label style={{...labelStyle, color: '#f43f5e'}}>Delay Weeks (Penalty 10%/wk)</label>
+                <div style={{position: 'relative', display: 'flex', alignItems: 'center'}}>
+                    <FiClock style={{position: 'absolute', left: '15px', color: '#f43f5e'}} />
+                    <input type="number" style={{...inputStyle, borderColor: '#fecaca', paddingLeft: '45px'}} 
+                        value={loanData.delayWeeks} 
+                        onChange={(e) => setLoanData({...loanData, delayWeeks: e.target.value})} />
+                </div>
             </div>
           </div>
-          <button onClick={calculateEMI} style={btnStyle}>Process Repayment View</button>
         </div>
 
-        {/* --- RIGHT: VISUAL SUMMARY --- */}
-        {result && (
-          <div style={cardStyle}>
-            <h3 style={cardTitle}><FiPieChart /> Breakdown Analysis</h3>
+        {/* --- VISUAL BREAKDOWN --- */}
+        <div style={cardStyle}>
+          <h3 style={cardTitle}><FiPieChart /> Payment Split</h3>
+          {result && (
             <div style={summaryGrid}>
-              <div style={{ height: '180px', width: '100%' }}>
+              <div style={{ height: '200px', width: '50%' }}>
                 <ResponsiveContainer>
                   <PieChart>
-                    <Pie data={result.chartData} innerRadius={60} outerRadius={80} paddingAngle={5} dataKey="value">
+                    <Pie data={result.chartData} innerRadius={55} outerRadius={75} paddingAngle={5} dataKey="value">
                       {result.chartData.map((entry, index) => (
                         <Cell key={`cell-${index}`} fill={entry.color} />
                       ))}
@@ -106,80 +121,96 @@ const LoanMaster = () => {
                 </ResponsiveContainer>
               </div>
               <div style={statsBox}>
-                <div style={statItem}>
-                  <small style={{color: '#94a3b8', fontWeight: 800}}>MONTHLY EMI</small>
-                  <p style={{fontSize: '24px', fontWeight: 900, margin: 0, color: '#0f172a'}}>₹{Number(result.emi).toLocaleString()}</p>
+                <div style={statItem('#eef2ff', '#6366f1')}>
+                    <small>EMI AMOUNT</small>
+                    <p>₹{Number(result.emi).toLocaleString()}</p>
                 </div>
-                <div style={statItem}>
-                  <small style={{color: '#94a3b8', fontWeight: 800}}>TOTAL INTEREST</small>
-                  <p style={{fontSize: '18px', fontWeight: 900, margin: 0, color: '#c58296'}}>₹{Number(result.totalInterest).toLocaleString()}</p>
+                <div style={statItem('#f0fdf4', '#10b981')}>
+                    <small>TOTAL INTEREST</small>
+                    <p>₹{Number(result.interest).toLocaleString()}</p>
+                </div>
+                <div style={statItem('#fff1f2', '#f43f5e')}>
+                    <small>DELAY PENALTY</small>
+                    <p>₹{Number(result.penalty).toLocaleString()}</p>
                 </div>
               </div>
             </div>
-          </div>
-        )}
+          )}
+        </div>
       </div>
 
-      {/* --- BOTTOM: REPAYMENT SCHEDULE TABLE --- */}
+      {/* --- BREAKDOWN CARDS --- */}
+      {result && (
+          <div style={breakdownContainer}>
+              <div style={bCard}>
+                  <FiInfo color="#6366f1" />
+                  <span>Processing Fee (2%): <b>₹{Number(result.processingFee).toLocaleString()}</b></span>
+              </div>
+              <div style={{...bCard, borderColor: '#10b981'}}>
+                  <FiArrowRight color="#10b981" />
+                  <span>Total Repayable: <b style={{fontSize: '18px'}}>₹{Number(result.totalPayable).toLocaleString()}</b></span>
+              </div>
+          </div>
+      )}
+
+      {/* --- AMORTIZATION TABLE --- */}
       {schedule.length > 0 && (
         <div style={{ ...cardStyle, marginTop: '30px', padding: 0, overflow: 'hidden' }}>
-          <div style={{ padding: '20px 25px', background: '#f8fafc', borderBottom: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <span style={{ fontWeight: 900, fontSize: '14px', textTransform: 'uppercase' }}>🗓 Repayment Ledger</span>
-            <span style={{ fontSize: '11px', color: '#64748b', fontWeight: 'bold' }}>Total Payable: ₹{Number(result.totalPayable).toLocaleString()}</span>
+          <div style={ledgerHeader}>
+            <span style={{ fontWeight: 900 }}>🗓 INSTALLMENT LEDGER (M={loanData.months})</span>
           </div>
-          <div style={{ overflowX: 'auto' }}>
-            <table style={tableStyle}>
-              <thead>
-                <tr style={tableHead}>
-                  <th style={thStyle}>Month</th>
-                  <th style={thStyle}>Installment</th>
-                  <th style={thStyle}>Principal Paid</th>
-                  <th style={thStyle}>Interest Paid</th>
-                  <th style={thStyle}>O/S Balance</th>
+          <table style={tableStyle}>
+            <thead>
+              <tr style={tableHead}>
+                <th style={thStyle}>No.</th>
+                <th style={thStyle}>Installment</th>
+                <th style={thStyle}>Principal</th>
+                <th style={thStyle}>Interest (10%)</th>
+                <th style={thStyle}>Penalty (W)</th>
+              </tr>
+            </thead>
+            <tbody>
+              {schedule.map((row) => (
+                <tr key={row.month} style={tableRow}>
+                  <td style={tdStyle}><span style={monthBadge}>{row.month}</span></td>
+                  <td style={{...tdStyle, fontWeight: 800, color: '#0f172a'}}>₹{Number(row.installment).toLocaleString()}</td>
+                  <td style={tdStyle}>₹{Number(row.principalPart).toLocaleString()}</td>
+                  <td style={{...tdStyle, color: '#10b981'}}>₹{Number(row.interestPart).toLocaleString()}</td>
+                  <td style={{...tdStyle, color: '#f43f5e'}}>₹{Number(row.penaltyPart).toLocaleString()}</td>
                 </tr>
-              </thead>
-              <tbody>
-                {schedule.map((row) => (
-                  <tr key={row.month} style={tableRow}>
-                    <td style={tdStyle}><span style={monthBadge}>{row.month}</span></td>
-                    <td style={tdStyle}>₹{Number(row.emi).toLocaleString()}</td>
-                    <td style={{ ...tdStyle, color: '#10b981', fontWeight: 700 }}>₹{Number(row.principal).toLocaleString()}</td>
-                    <td style={{ ...tdStyle, color: '#ef4444', fontWeight: 700 }}>₹{Number(row.interest).toLocaleString()}</td>
-                    <td style={{ ...tdStyle, fontWeight: 900 }}>₹{Number(row.balance).toLocaleString()}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+              ))}
+            </tbody>
+          </table>
         </div>
       )}
     </div>
   );
 };
 
-// --- STYLES (Modern Fintech UI) ---
-const containerStyle = { padding: '30px', background: '#f4f7fe', minHeight: '100vh', fontFamily: '"Inter", sans-serif' };
-const headerStyle = { marginBottom: '30px', borderLeft: '5px solid #0f172a', paddingLeft: '20px' };
-const mainGrid = { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(350px, 1fr))', gap: '25px' };
-const cardStyle = { background: '#fff', padding: '30px', borderRadius: '24px', boxShadow: '0 10px 30px rgba(0,0,0,0.03)', border: '1px solid #fff' };
-const cardTitle = { margin: '0 0 25px 0', fontSize: '16px', fontWeight: 900, color: '#0f172a', display: 'flex', alignItems: 'center', gap: '10px', textTransform: 'uppercase', letterSpacing: '1px' };
+// --- STYLES ---
+const containerStyle = { padding: '30px', background: '#f8fafc', minHeight: '100vh', fontFamily: 'sans-serif' };
+const headerStyle = { marginBottom: '30px' };
+const logoBadge = { background: '#0f172a', color: '#fff', padding: '12px', borderRadius: '12px' };
+const mainTitle = { margin: 0, fontWeight: 900, fontSize: '22px' };
+const subTitleText = { margin: 0, color: '#94a3b8', fontSize: '12px', fontWeight: 600 };
+const mainGrid = { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(380px, 1fr))', gap: '25px' };
+const cardStyle = { background: '#fff', padding: '30px', borderRadius: '24px', border: '1px solid #e2e8f0', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.05)' };
+const cardTitle = { margin: '0 0 20px 0', fontSize: '13px', fontWeight: 900, textTransform: 'uppercase', letterSpacing: '1px', display: 'flex', alignItems: 'center', gap: '8px' };
 const inputGroup = { display: 'flex', flexDirection: 'column', gap: '20px' };
 const inputBox = { display: 'flex', flexDirection: 'column', gap: '8px' };
-const labelStyle = { fontSize: '11px', fontWeight: 800, color: '#94a3b8', textTransform: 'uppercase' };
-const fieldWrapper = { position: 'relative', display: 'flex', alignItems: 'center' };
-const iconStyle = { position: 'absolute', left: '15px', color: '#cbd5e1' };
-const inputStyle = { width: '100%', padding: '14px 14px 14px 45px', borderRadius: '14px', border: '1.5px solid #f1f5f9', background: '#f8fafc', fontWeight: 700, outline: 'none', transition: '0.3s' };
-const btnStyle = { marginTop: '25px', width: '100%', padding: '16px', background: '#0f172a', color: '#fff', border: 'none', borderRadius: '16px', fontWeight: 900, fontSize: '13px', cursor: 'pointer', textTransform: 'uppercase', letterSpacing: '1px', boxShadow: '0 10px 20px rgba(15, 23, 42, 0.15)' };
-
+const labelStyle = { fontSize: '10px', fontWeight: 900, color: '#64748b', textTransform: 'uppercase' };
+const inputStyle = { width: '100%', padding: '14px', borderRadius: '12px', border: '1.5px solid #e2e8f0', outline: 'none', fontWeight: 700 };
 const summaryGrid = { display: 'flex', alignItems: 'center', gap: '20px' };
-const statsBox = { flex: 1, display: 'flex', flexDirection: 'column', gap: '15px' };
-const statItem = { padding: '15px', background: '#f8fafc', borderRadius: '16px' };
-
-const tableStyle = { width: '100%', borderCollapse: 'collapse' };
-const tableHead = { background: '#f8fafc', textAlign: 'left', fontSize: '10px', textTransform: 'uppercase', color: '#94a3b8' };
-const tableRow = { borderBottom: '1px solid #f1f5f9', fontSize: '13px' };
-const thStyle = { padding: '15px 25px', fontWeight: 800 };
-const tdStyle = { padding: '15px 25px', color: '#334155', fontWeight: 500 };
-const monthBadge = { padding: '4px 10px', background: '#0f172a', color: '#fff', borderRadius: '6px', fontSize: '10px', fontWeight: 900 };
+const statsBox = { flex: 1, display: 'flex', flexDirection: 'column', gap: '10px' };
+const statItem = (bg, color) => ({ padding: '12px', background: bg, borderRadius: '15px', border: `1px solid ${color}20`, color: color });
+const breakdownContainer = { display: 'flex', gap: '20px', marginTop: '25px' };
+const bCard = { flex: 1, background: '#fff', padding: '20px', borderRadius: '18px', border: '1.5px solid #e2e8f0', display: 'flex', alignItems: 'center', gap: '12px', fontSize: '14px' };
+const ledgerHeader = { padding: '20px', borderBottom: '1px solid #f1f5f9', background: '#fff' };
+const tableStyle = { width: '100%', borderCollapse: 'collapse', background: '#fff' };
+const tableHead = { background: '#f8fafc', textAlign: 'left', fontSize: '10px', color: '#94a3b8' };
+const tableRow = { borderBottom: '1px solid #f8fafc' };
+const thStyle = { padding: '15px 20px' };
+const tdStyle = { padding: '15px 20px', fontSize: '13px', fontWeight: 600 };
+const monthBadge = { padding: '4px 8px', background: '#0f172a', color: '#fff', borderRadius: '6px', fontSize: '10px' };
 
 export default LoanMaster;

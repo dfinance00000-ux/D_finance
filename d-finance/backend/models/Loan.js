@@ -5,41 +5,75 @@ const LoanSchema = new mongoose.Schema({
   loanId: { 
     type: String, 
     unique: true, 
-    required: true 
+    required: [true, "Loan ID is required"] 
   },
   customerId: { 
     type: mongoose.Schema.Types.ObjectId, 
     ref: 'User', 
-    required: true 
+    required: [true, "Customer ID is required"] 
   },
   customerName: { 
     type: String, 
-    required: true 
+    required: [true, "Customer Name is required"] 
   },
   
   // --- 🧑‍💼 Field Officer Logic ---
-  // Mixed rakha hai taaki String ya ObjectId dono handle ho sakein
   fieldOfficerId: { 
     type: mongoose.Schema.Types.Mixed, 
     default: null 
   },
+  fieldOfficerName: { type: String },
+  verifiedByName: { type: String }, 
   isAssigned: { 
     type: Boolean, 
     default: false 
   },
 
   // --- 💰 Amount Details ---
-  amount: { type: Number, required: true }, 
+  amount: { type: Number, required: [true, "Amount is required"] }, 
   processingFee: { type: Number, default: 0 },
   fileCharge: { type: Number, default: 0 },
   netDisbursed: { type: Number }, 
   
   // --- 📈 Tenure & EMI Math ---
-  tenureMonths: { type: Number, required: true }, 
+  tenureMonths: { type: Number, required: [true, "Tenure is required"] }, 
   totalWeeks: { type: Number }, 
-  weeklyEMI: { type: Number, required: true }, 
-  totalPayable: { type: Number, required: true }, 
+  totalDays: { type: Number },
+  weeklyEMI: { type: Number },
+  dailyEMI: { type: Number },
+  totalPayable: { type: Number, required: [true, "Total Payable amount is required"] }, 
   
+  // --- 🏦 BANK DETAILS ---
+  accountHolderName: { type: String },
+  bankName: { type: String },
+  branchName: { type: String },
+  accountNumber: { type: String },
+  ifscCode: { type: String },
+  lastTransactionDate: { type: String },
+
+  // --- 📸 KYC DOCUMENTS ---
+  passbookPic: { type: String },
+  aadhaarFront: { type: String },
+  aadhaarBack: { type: String },
+  secondaryIdFront: { type: String },
+  secondaryIdBack: { type: String },
+  nomineePic: { type: String },
+
+  // --- 👤 NOMINEE DETAILS ---
+  nomineeName: { type: String },
+  nomineeRelation: { type: String },
+  nomineeDOB: { type: String },
+  nomineeMobile: { type: String },
+  nomineeAddress: { type: String },
+  nomineeGender: { type: String },
+
+  // --- 🏠 FIELD AUDIT DETAILS ---
+  religion: { type: String },
+  category: { type: String },
+  houseType: { type: String },
+  monthlyIncome: { type: String },
+  inspectionDate: { type: Date },
+
   // --- 📂 Categorization ---
   type: { 
     type: String, 
@@ -49,21 +83,24 @@ const LoanSchema = new mongoose.Schema({
   emiFrequency: { 
     type: String, 
     enum: ['Daily', 'Weekly', 'Monthly'], 
-    default: 'Weekly' 
+    default: 'Daily' 
   },
 
   // --- 🚦 Status Workflow ---
   status: { 
     type: String, 
     enum: [
+      'Pending',                // 🔥 Added for general use
       'Hold - Pending Assignment', 
       'Pending Verification', 
+      'Verification Pending', 
+      'Field Verified', 
       'Approved', 
-      'Rejected', 
       'Disbursed', 
+      'Rejected', 
       'Closed'
     ], 
-    default: 'Hold - Pending Assignment' 
+    default: 'Pending Verification' 
   },
 
   // --- 💳 Repayment Tracking ---
@@ -71,30 +108,23 @@ const LoanSchema = new mongoose.Schema({
   totalPending: { type: Number }, 
   nextEmiDate: Date,
   
-  // repaymentHistory: [
-  //   {
-  //     paymentId: String, 
-  //     orderId: String,   
-  //     amount: Number,
-  //     date: { type: Date, default: Date.now },
-  //     status: { type: String, default: 'Success' }
-  //   }
-  // ],
+  // 🔥 Internal History Tracking
+  repaymentHistory: [
+    {
+      amount: Number,
+      date: { type: Date, default: Date.now },
+      utr: { type: String, trim: true },
+      status: { 
+        type: String, 
+        enum: ['Pending', 'Approved', 'Rejected'], 
+        default: 'Pending' 
+      }
+    }
+  ],
 
-  // models/Loan.js mein repaymentHistory array ko aise update karo
-repaymentHistory: [
-  {
-    amount: Number,
-    date: { type: Date, default: Date.now },
-    utr: String,        // Transaction ID (User bharega)
-    screenshot: String, // Screenshot ka URL
-    status: { type: String, default: 'Pending' } // Admin approve karega
-  }
-],
-  // --- 🗓️ Metadata ---
   appliedDate: { type: Date, default: Date.now }
 }, { 
-  timestamps: true // Automatically handles createdAt and updatedAt
+  timestamps: true 
 });
 
 module.exports = mongoose.models.Loan || mongoose.model('Loan', LoanSchema);

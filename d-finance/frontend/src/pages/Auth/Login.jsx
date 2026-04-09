@@ -150,7 +150,29 @@ const Login = () => {
             <FiPhone /> Call to Help
           </div>
         </div>
+
+        {/* 🚀 Naya Line: Landing Page par vapas jane ke liye */}
+        <div style={{ marginTop: '20px', textAlign: 'center' }}>
+          <Link 
+            to="/" 
+            style={{ 
+              color: '#64748b', 
+              textDecoration: 'none', 
+              fontSize: '13px', 
+              fontWeight: 'bold',
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '5px',
+              transition: '0.3s'
+            }}
+            onMouseOver={(e) => e.target.style.color = '#0f172a'}
+            onMouseOut={(e) => e.target.style.color = '#64748b'}
+          >
+            <FiArrowLeft /> Back to Website
+          </Link>
+        </div>
       </div>
+      
       <p style={branchTag}>D-Finance • Mathura Branch</p>
     </div>
   );

@@ -37,6 +37,8 @@ import RegisterCustomer from '../pages/officer/RegisterCustomer';
 import MyTeam from '../pages/User/MyTeam';
 // Accountant Pages
 import AccountantApproval from '../pages/Accountant/AccountantApproval'; 
+import PaymentApproval from '../pages/Accountant/PaymentApproval';
+
 
 // Customer Pages
 import CustomerDashboard from "../pages/Customer/CustomerDashboard";
@@ -84,11 +86,12 @@ const AppRoutes = () => {
       </Route>
 
       {/* 5. Accountant Routes */}
-      <Route path="/accountant" element={<AccountantLayout />}>
-        <Route index element={<Navigate to="approval" replace />} />
-        <Route path="approval" element={<AccountantApproval />} />
-        <Route path="collection-logs" element={<DailyCollectionReport />} />
-      </Route>
+      <Route path="/accountant" element={<AccountantLayout />}> 
+  {/* Yahan se slash hata do */}
+  <Route path="approval" element={<AccountantApproval />} /> 
+  <Route path="payment-approval" element={<PaymentApproval />} /> 
+</Route>
+     
 
       {/* 6. Customer Routes */}
       <Route path="/customer" element={<CustomerLayout />}>
