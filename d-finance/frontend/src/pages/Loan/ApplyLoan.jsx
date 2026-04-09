@@ -12,7 +12,11 @@ const ApplyLoan = () => {
     type: 'JLG Loan', 
     tenure: '3', 
     isPep: 'No', 
-    isDisabled: 'No' 
+    isDisabled: 'No',
+    // 🆕 New Bank Fields
+    bankName: '',
+    accountNumber: '',
+    ifscCode: ''
   });
 
   // --- MARKET MATH LOGIC ---
@@ -38,6 +42,9 @@ const ApplyLoan = () => {
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!formData.amount || formData.amount <= 0) return alert("Please enter a valid amount.");
+    if (!formData.bankName || !formData.accountNumber || !formData.ifscCode) {
+      return alert("Please fill in all bank details for disbursement.");
+    }
     if (!user.id) return alert("Session expired. Please login again.");
     
     setLoading(true);
@@ -48,7 +55,6 @@ const ApplyLoan = () => {
       loanId: generatedLoanId,
       customerId: user.id,
       customerName: user.fullName || "Unknown Customer",
-      // 🚀 AGAR Officer linked nahi hai toh null bhejenge taaki Hold par jaye
       fieldOfficerId: user.referredBy || user.sponsorId || null, 
       amount: Number(formData.amount),
       type: formData.type,
@@ -59,7 +65,10 @@ const ApplyLoan = () => {
       netDisbursed: finance.netDisbursed,
       weeklyEMI: Number(finance.weeklyEMI), 
       totalPayable: finance.totalPayable,
-      // Status backend ka middleware handle karega
+      // 🆕 Including Bank Details in Request
+      bankName: formData.bankName,
+      accountNumber: formData.accountNumber,
+      ifscCode: formData.ifscCode.toUpperCase(),
       appliedDate: new Date().toISOString(),
     };
 
@@ -67,7 +76,7 @@ const ApplyLoan = () => {
       const res = await API.post('/loans', loanRequest);
 
       if (res.data.success) {
-        alert(`Loan Applied! Ref ID: ${generatedLoanId}. Status: ${res.data.loan.status}`);
+        alert(`Loan Applied! Ref ID: ${generatedLoanId}. Bank Details Registered.`);
         navigate('/customer/tracking'); 
       }
     } catch (error) {
@@ -94,6 +103,7 @@ const ApplyLoan = () => {
         </div>
         
         <form onSubmit={handleSubmit}>
+          {/* Amount and Basic Info */}
           <div style={inputGroup}>
             <label style={label}>Loan Amount (₹)</label>
             <input type="number" style={inputStyle} value={formData.amount} required 
@@ -120,6 +130,28 @@ const ApplyLoan = () => {
             </div>
           </div>
 
+          {/* 🆕 Bank Details Section */}
+          <div style={bankSection}>
+            <h4 style={bankTitle}>🏦 Disbursement Bank Account</h4>
+            <div style={inputGroup}>
+              <label style={label}>Bank Name</label>
+              <input type="text" style={inputStyle} placeholder="e.g. State Bank of India" 
+                value={formData.bankName} onChange={e => setFormData({...formData, bankName: e.target.value})} required />
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1.5fr 1fr', gap: '15px' }}>
+              <div style={inputGroup}>
+                <label style={label}>Account Number</label>
+                <input type="text" style={inputStyle} placeholder="Full A/C Number" 
+                  value={formData.accountNumber} onChange={e => setFormData({...formData, accountNumber: e.target.value})} required />
+              </div>
+              <div style={inputGroup}>
+                <label style={label}>IFSC Code</label>
+                <input type="text" style={inputStyle} placeholder="SBIN0001234" 
+                  value={formData.ifscCode} onChange={e => setFormData({...formData, ifscCode: e.target.value})} required />
+              </div>
+            </div>
+          </div>
+
           <div style={feeBox}>
             <div style={feeRow}><span>Processing Fee (1%):</span> <span>- ₹{finance.processingFee.toFixed(2)}</span></div>
             <div style={feeRow}><span>File Verification Charges:</span> <span>- ₹{finance.fileCharge}</span></div>
@@ -135,7 +167,7 @@ const ApplyLoan = () => {
           </div>
 
           <button type="submit" disabled={loading} style={loading ? {...btnStyle, background: '#94a3b8'} : btnStyle}>
-            {loading ? "Registering Application..." : "Submit for Field Verification"}
+            {loading ? "Processing..." : "Submit for Verification"}
           </button>
         </form>
       </div>
@@ -144,19 +176,18 @@ const ApplyLoan = () => {
         <h4 style={{ margin: '0 0 15px 0', color: '#0f172a', fontWeight: '900', fontSize: '14px' }}>📌 SOP COMPLIANCE</h4>
         <ul style={{ paddingLeft: '0', listStyle: 'none', fontSize: '12px', color: '#475569', lineHeight: '2.2' }}>
           <li>✅ <b>Recovery:</b> Weekly doorstep or AC debit.</li>
-          <li>✅ <b>Penalty:</b> 10% monthly on overdue amount.</li>
-          <li>✅ <b>Verification:</b> LUC & Neighborhood check.</li>
-          <li>✅ <b>Assignment:</b> Unassigned loans go to the Open Pool.</li>
+          <li>✅ <b>Bank Details:</b> Ensure A/C belongs to Applicant.</li>
+          <li>✅ <b>Disbursement:</b> Funds released after Field LUC.</li>
         </ul>
-        <div style={{ marginTop: '20px', padding: '15px', background: '#fff', borderRadius: '12px', fontSize: '11px', color: '#b91c1c', fontWeight: 'bold', border: '1px dashed #fca5a5' }}>
-            ⚠️ Notice: If you don't have an Advisor ID, your loan will be placed in the Open Pool for officers to claim.
+        <div style={alertBox}>
+            ⚠️ <b>Verification Notice:</b> Our Field Officer will visit your house for LUC check before disbursement. Keep your Aadhar card ready.
         </div>
       </div>
     </div>
   );
 };
 
-// --- Styles stay exactly as you had them ---
+// --- Updated/New Styles ---
 const pageContainer = { display: 'flex', gap: '25px', padding: '30px', maxWidth: '1200px', margin: '0 auto', background: '#f8fafc', minHeight: '100vh', alignItems: 'flex-start' };
 const formCard = { flex: '2', background: '#fff', padding: '40px', borderRadius: '32px', boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.05)', border: '1px solid #e2e8f0' };
 const infoPanel = { flex: '1', background: '#f0fdf4', padding: '30px', borderRadius: '32px', border: '1px solid #dcfce7', position: 'sticky', top: '20px' };
@@ -165,9 +196,12 @@ const advisorBadge = { background: '#f1f5f9', color: '#64748b', fontSize: '9px',
 const inputGroup = { marginBottom: '20px' };
 const label = { display: 'block', fontSize: '10px', fontWeight: '900', color: '#475569', marginBottom: '8px', textTransform: 'uppercase', letterSpacing: '0.5px' };
 const inputStyle = { width: '100%', padding: '14px', borderRadius: '14px', border: '1.5px solid #e2e8f0', fontSize: '14px', fontWeight: '700', outline: 'none', background: '#fcfcfc', color: '#1e293b', boxSizing: 'border-box' };
+const bankSection = { padding: '20px', background: '#f8fafc', borderRadius: '24px', border: '1px solid #e2e8f0', marginBottom: '25px' };
+const bankTitle = { margin: '0 0 15px 0', fontSize: '13px', color: '#1e293b', fontWeight: '900' };
 const feeBox = { background: '#f8fafc', padding: '20px', borderRadius: '20px', marginBottom: '25px', border: '1px solid #f1f5f9' };
 const feeRow = { display: 'flex', justifyContent: 'space-between', fontSize: '13px', color: '#64748b', marginBottom: '8px', fontWeight: '600' };
 const emiPreview = { background: '#f0fdf4', padding: '25px', borderRadius: '24px', marginBottom: '25px', border: '2px dashed #059669', textAlign: 'center' };
 const btnStyle = { width: '100%', padding: '18px', background: '#059669', color: '#fff', border: 'none', borderRadius: '18px', cursor: 'pointer', fontWeight: '900', fontSize: '15px', transition: 'all 0.3s', boxShadow: '0 10px 15px -3px rgba(5, 150, 105, 0.3)' };
+const alertBox = { marginTop: '20px', padding: '15px', background: '#fff', borderRadius: '12px', fontSize: '11px', color: '#b91c1c', fontWeight: 'bold', border: '1px dashed #fca5a5' };
 
 export default ApplyLoan;

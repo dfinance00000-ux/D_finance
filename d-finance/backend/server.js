@@ -14,17 +14,38 @@ const app = express();
 // --- 1. DATABASE & MIDDLEWARES ---
 connectDB();
 // --- server.js mein cors settings ---
+// --- DATABASE & MIDDLEWARES KE BAAD ---
+
 app.use(cors({
   origin: [
-    "https://d-finance-izsi.vercel.app", 
-    "https://dfinance.space",            // Aapka custom domain
-    "http://localhost:5173"              // Local testing ke liye
+    "http://localhost:5173",                   // Local Testing ke liye
+    "https://d-finance-izsi.vercel.app",       // Aapka Frontend (Vercel)
+    "https://dfinance.space"                   // Aapka Custom Domain (agar hai)
   ],
-  methods: ["GET", "POST", "PUT", "DELETE"],
+  methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
   credentials: true,
-  allowedHeaders: ["Content-Type", "Authorization"] // 👈 Ye add karna zaroori hai Preflight ke liye
-}));   
+  allowedHeaders: ["Content-Type", "Authorization"]
+}));
+
+// Ye hamesha CORS ke niche hona chahiye
 app.use(express.json());
+
+// --- EXTRA SAFETY FOR RENDER (Preflight fix) ---
+app.use((req, res, next) => {
+  const origin = req.headers.origin;
+  // Agar request allow list se hai toh header set karein
+  if (origin && (origin.includes("localhost") || origin.includes("vercel.app") || origin.includes("onrender.com"))) {
+    res.header("Access-Control-Allow-Origin", origin);
+  }
+  res.header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, PATCH, OPTIONS");
+  res.header("Access-Control-Allow-Headers", "Content-Type, Authorization");
+  res.header("Access-Control-Allow-Credentials", "true");
+
+  if (req.method === "OPTIONS") {
+    return res.sendStatus(200);
+  }
+  next();
+});
 
 // --- 2. AUTH MIDDLEWARE ---
 const verifyToken = (req, res, next) => {
