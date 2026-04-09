@@ -57,6 +57,7 @@ const AppRoutes = () => {
       <Route path="/admin" element={<AdminLayout />}>
         {/* Analytics & Core Management */}
         <Route index element={<AdminStatsDashboard />} /> 
+        <Route path="/admin/analytics" element={<AdminStatsDashboard />} />
         <Route path="analytics" element={<AdminStatsDashboard />} />
         <Route path="approvals" element={<AdminApproval />} />
         <Route path="advisor-performance" element={<AdvisorPerformance />} />

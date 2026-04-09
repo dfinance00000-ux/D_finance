@@ -1,10 +1,13 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import API from '../../api/axios'; 
+import PaymentModal from '../Payment/PaymentModal'; // Path as per your structure
 
 const EMIPayments = () => {
   const [loans, setLoans] = useState([]);
   const [payments, setPayments] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [selectedLoan, setSelectedLoan] = useState(null);
+  const [showModal, setShowModal] = useState(false);
   
   const user = JSON.parse(localStorage.getItem('user')) || {};
 
@@ -12,13 +15,12 @@ const EMIPayments = () => {
     if (!user.id && !user._id) return;
     
     try {
-      // Backend endpoints se data sync
       const [loanRes, payRes] = await Promise.all([
         API.get(`/loans?customerId=${user.id || user._id}`),
         API.get(`/payments?customerId=${user.id || user._id}`)
       ]);
       
-      const activeLoans = loanRes.data.filter(l => l.status === 'Approved' || l.status === 'Disbursed');
+      const activeLoans = loanRes.data.filter(l => l.status === 'Approved' || l.status === 'Disbursed' || l.status === 'Pending Verification');
       setLoans(activeLoans);
       setPayments(payRes.data.reverse());
     } catch (err) {
@@ -32,14 +34,12 @@ const EMIPayments = () => {
     fetchData();
   }, [fetchData]);
 
-  // Logic to calculate Weekly Due (Mathura Model)
   const getWeeklyBillingInfo = (loan) => {
     const nextDue = new Date(loan.nextEmiDate || Date.now());
     const today = new Date();
     
-    // Check if paid for the current week from repaymentHistory or payments
     const isPaidThisWeek = loan.totalPaid >= loan.amount || payments.some(p => {
-      const pDate = new Date(p.paymentDate);
+      const pDate = new Date(p.paymentDate || p.date);
       const startOfWeek = new Date(nextDue);
       startOfWeek.setDate(startOfWeek.getDate() - 7);
       return p.loanId === loan.loanId && pDate >= startOfWeek && pDate <= nextDue;
@@ -52,25 +52,23 @@ const EMIPayments = () => {
     return { nextDue, isOverdue, fine, isPaidThisWeek };
   };
 
+  // ---------------------------------------------------------
+  // 💳 OPTION 1: RAZORPAY LOGIC (Currently Commented)
+  // ---------------------------------------------------------
+  /*
   const handleRazorpayPayment = async (loan) => {
     try {
-      // 1. Backend se Dynamic EMI Order ID lena
-      const orderRes = await API.post('/payments/create-emi-order', { 
-        loanId: loan.loanId 
-      });
-      
+      const orderRes = await API.post('/payments/create-emi-order', { loanId: loan.loanId });
       const { orderId, amount, key } = orderRes.data;
 
-      // 2. Razorpay Window Options
       const options = {
-        key: key, // Live Key from Backend
+        key: key,
         amount: amount * 100, 
         currency: "INR",
         name: "D-FINANCE",
         description: `EMI Payment for Loan #${loan.loanId}`,
         order_id: orderId,
         handler: async (response) => {
-          // 3. Success: Verify Signature on Backend
           try {
             const verifyRes = await API.post('/payments/verify', {
               razorpay_order_id: response.razorpay_order_id,
@@ -78,34 +76,38 @@ const EMIPayments = () => {
               razorpay_signature: response.razorpay_signature,
               loanId: loan.loanId
             });
-
             if (verifyRes.data.success) {
-              alert("Payment Verified & Recorded! EMI Status Updated.");
-              fetchData(); // Refresh UI
+              alert("Payment Verified!");
+              fetchData();
             }
           } catch (err) {
-            alert("Payment Success but Verification Failed. Contact Branch.");
+            alert("Verification Failed.");
           }
         },
-        prefill: { 
-            name: user.fullName, 
-            contact: user.mobile || "" 
-        },
+        prefill: { name: user.fullName, contact: user.mobile || "" },
         theme: { color: "#2563eb" }
       };
-
       const rzp = new window.Razorpay(options);
       rzp.open();
     } catch (err) {
-      alert(err.response?.data?.error || "Payment Gateway Error.");
+      alert(err.response?.data?.error || "Gateway Error.");
     }
+  };
+  */
+
+  // ---------------------------------------------------------
+  // 🏦 OPTION 2: MANUAL QR LOGIC (Currently Active)
+  // ---------------------------------------------------------
+  const handleOpenQR = (loan) => {
+    setSelectedLoan(loan);
+    setShowModal(true);
   };
 
   return (
     <div style={{ padding: '20px', maxWidth: '1200px', margin: '0 auto' }}>
       <div style={headerSection}>
         <h2 style={{ color: '#0f172a', margin: 0, fontWeight: '900' }}>💳 Weekly Repayment Portal</h2>
-        <p style={{ color: '#64748b', fontSize: '13px' }}>Pay your installments securely via Razorpay Live.</p>
+        <p style={{ color: '#64748b', fontSize: '13px' }}>Pay your installments securely via UPI QR.</p>
       </div>
 
       {loading ? (
@@ -126,7 +128,7 @@ const EMIPayments = () => {
                   {isOverdue ? (
                     <span style={overdueBadge}>⚠️ OVERDUE</span>
                   ) : isPaidThisWeek ? (
-                    <span style={paidBadge}>✅ PAID</span>
+                    <span style={paidBadge}>✅ PROCESSING</span>
                   ) : (
                     <span style={pendingBadge}>⏳ DUE</span>
                   )}
@@ -135,7 +137,7 @@ const EMIPayments = () => {
                 <div style={billingCycleBox}>
                   <div style={cycleItem}>
                     <label style={miniLabel}>EMI Amount</label>
-                    <p style={cycleVal}>₹{loan.emiAmount}</p>
+                    <p style={cycleVal}>₹{loan.emiAmount || loan.weeklyEMI}</p>
                   </div>
                   <div style={{...cycleItem, borderLeft: '1px solid #e2e8f0', paddingLeft: '15px'}}>
                     <label style={miniLabel}>Due Date</label>
@@ -152,10 +154,12 @@ const EMIPayments = () => {
                 <div style={actionRow}>
                   <button 
                     disabled={isPaidThisWeek}
-                    onClick={() => handleRazorpayPayment(loan)} 
+                    // 👇 Switch functions here when Razorpay is live
+                    onClick={() => handleOpenQR(loan)} 
+                    // onClick={() => handleRazorpayPayment(loan)} 
                     style={isPaidThisWeek ? disabledBtn : payBtn}
                   >
-                    {isPaidThisWeek ? "Installment Paid" : `Pay Installment (₹${loan.emiAmount + (isOverdue ? fine : 0)})`}
+                    {isPaidThisWeek ? "Verification Pending" : `Pay Now (₹${(loan.emiAmount || loan.weeklyEMI) + (isOverdue ? fine : 0)})`}
                   </button>
                 </div>
               </div>
@@ -171,19 +175,27 @@ const EMIPayments = () => {
             <table style={tableStyle}>
             <thead>
                 <tr style={tableHeader}>
-                <th>DATE</th>
-                <th>RECEIPT</th>
-                <th>AMOUNT</th>
-                <th>STATUS</th>
+                    <th>DATE</th>
+                    <th>UTR / RECEIPT</th>
+                    <th>AMOUNT</th>
+                    <th>STATUS</th>
                 </tr>
             </thead>
             <tbody>
-                {payments.length > 0 ? payments.slice(0, 5).map(p => (
+                {payments.length > 0 ? payments.slice(0, 10).map(p => (
                 <tr key={p._id} style={tableRow}>
                     <td style={{padding: '12px 0'}}>{new Date(p.paymentDate || p.date).toLocaleDateString()}</td>
-                    <td>{p.receiptId || p.razorpay_payment_id?.slice(-8)}</td>
+                    <td style={{fontSize: '11px'}}>{p.utr || p.razorpay_payment_id || 'N/A'}</td>
                     <td style={{fontWeight: 'bold'}}>₹{p.amount}</td>
-                    <td><span style={{color: '#059669', fontWeight: 'bold'}}>● {p.status}</span></td>
+                    <td>
+                        <span style={{
+                            color: p.status === 'Approved' ? '#059669' : '#d97706',
+                            background: p.status === 'Approved' ? '#dcfce7' : '#fef3c7',
+                            padding: '4px 8px', borderRadius: '6px', fontSize: '10px', fontWeight: 'bold'
+                        }}>
+                           ● {p.status?.toUpperCase()}
+                        </span>
+                    </td>
                 </tr>
                 )) : (
                     <tr><td colSpan="4" style={{textAlign:'center', padding:'20px', color:'#94a3b8'}}>No history found</td></tr>
@@ -192,11 +204,20 @@ const EMIPayments = () => {
             </table>
         </div>
       </div>
+
+      {/* Manual Payment Modal */}
+      {showModal && selectedLoan && (
+        <PaymentModal 
+          loan={selectedLoan} 
+          onClose={() => setShowModal(false)} 
+          onRefresh={fetchData}
+        />
+      )}
     </div>
   );
 };
 
-// --- Styles Update ---
+// --- Styles ---
 const headerSection = { marginBottom: '30px', borderBottom: '1px solid #f1f5f9', paddingBottom: '15px' };
 const gridContainer = { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '20px' };
 const paymentCard = { background: '#fff', padding: '25px', borderRadius: '24px', boxShadow: '0 10px 25px rgba(0,0,0,0.03)', border: '1px solid #f1f5f9' };
@@ -211,9 +232,9 @@ const paidBadge = { background: '#dcfce7', color: '#166534', padding: '5px 12px'
 const pendingBadge = { background: '#fef9c3', color: '#854d0e', padding: '5px 12px', borderRadius: '20px', fontSize: '10px', fontWeight: '900' };
 const idTag = { fontSize: '11px', color: '#94a3b8', fontWeight: '900' };
 const actionRow = { display: 'flex', gap: '10px' };
-const payBtn = { flex: 1, padding: '16px', background: '#2563eb', color: '#fff', border: 'none', borderRadius: '12px', fontWeight: '800', cursor: 'pointer', transition: '0.3s' };
+const payBtn = { flex: 1, padding: '16px', background: '#0f172a', color: '#fff', border: 'none', borderRadius: '12px', fontWeight: '800', cursor: 'pointer', transition: '0.3s', fontSize: '11px', textTransform: 'uppercase' };
 const disabledBtn = { ...payBtn, background: '#f1f5f9', color: '#94a3b8', cursor: 'not-allowed' };
-const historySection = { marginTop: '50px', background: '#fff', padding: '30px', borderRadius: '24px', boxShadow: '0 4px 15px rgba(0,0,0,0.02)' };
+const historySection = { marginTop: '50px', background: '#fff', padding: '30px', borderRadius: '24px', boxShadow: '0 4px 15px rgba(0,0,0,0.02)', border: '1px solid #f1f5f9' };
 const tableStyle = { width: '100%', borderCollapse: 'collapse' };
 const tableHeader = { textAlign: 'left', color: '#94a3b8', fontSize: '10px', fontWeight: '900', borderBottom: '1px solid #f1f5f9', paddingBottom: '10px' };
 const tableRow = { borderBottom: '1px solid #f8fafc', fontSize: '13px' };

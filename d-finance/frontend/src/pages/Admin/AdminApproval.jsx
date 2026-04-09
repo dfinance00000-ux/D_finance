@@ -1,152 +1,213 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import API from "../../api/axios";
+import { 
+  FiLock, FiUser, FiRefreshCw, FiShield, FiSearch, 
+  FiToggleLeft, FiToggleRight, FiBriefcase, FiUsers, FiTrash2 
+} from 'react-icons/fi';
 
 const AdminApproval = () => {
   const [loans, setLoans] = useState([]);
+  const [allUsers, setAllUsers] = useState([]); 
   const [loading, setLoading] = useState(true);
+  const [masterMode, setMasterMode] = useState(false); 
+  const [searchTerm, setSearchTerm] = useState("");
 
-  // LocalStorage se logged-in user ki details (Role check ke liye)
-  const user = JSON.parse(localStorage.getItem('user')) || {};
+  // Local storage se current user ki details
+  const currentUser = JSON.parse(localStorage.getItem('user')) || {};
 
-  // 1. Fetch Loans (Filter: Field Verified)
-  const fetchPendingLoans = useCallback(async () => {
+  // 1. Fetch Data: Loans aur Absolute User List
+  const fetchData = useCallback(async () => {
     try {
       setLoading(true);
-      // 🔥 FIX: Admin routes ka use karke saara data Atlas se fetch karna
-      const res = await API.get('/admin/all-loans');
       
-      // ✅ LOGIC: Sirf wahi dikhao jo Advisor ne 'Field Verified' kar diye hain
-      // Ya jo 'Pending Accountant Approval' par hain
-      const pending = res.data.filter(loan => 
-        loan.status === 'Field Verified' || 
-        loan.status === 'Pending Accountant Approval'
+      const [loansRes, usersRes] = await Promise.all([
+        API.get('/admin/all-loans').catch(() => ({ data: [] })),
+        // 🔥 Ye route backend mein User.find({}) hona chahiye (No filters)
+        API.get('/admin/all-users-absolute').catch(() => ({ data: [] })) 
+      ]);
+
+      // Disbursement Queue (Normal Mode)
+      const pending = loansRes.data.filter(loan => 
+        ['Field Verified', 'Pending Verification', 'Pending Accountant Approval'].includes(loan.status)
       );
       
       setLoans(pending.reverse());
+      setAllUsers(usersRes.data || []);
+      
     } catch (err) {
-      console.error("Fetch Error:", err);
+      console.error("Atlas Sync Error:", err);
     } finally {
       setLoading(false);
     }
   }, []);
 
-  useEffect(() => {
-    fetchPendingLoans();
-  }, [fetchPendingLoans]);
+  useEffect(() => { fetchData(); }, [fetchData]);
 
-  // 2. Approve/Disburse Loan Logic
-  const handleApprove = async (loan) => {
-    const confirmMsg = `Confirm Disbursement for ${loan.customerName}?\nAmount: ₹${loan.amount}\nNet Disburse: ₹${loan.netDisbursed}`;
-    
-    if (!window.confirm(confirmMsg)) return;
-    
+  // 🔑 Global Password Change (For ANY User)
+  const handleResetPassword = async (userId, name) => {
+    const newPass = window.prompt(`Master Security: Set NEW password for ${name}:`);
+    if (!newPass || newPass.length < 4) return alert("Error: Password too short!");
+
     try {
-      // 🔥 FIX: Backend approval route call (Using MongoDB _id)
-      const res = await API.post(`/accountant/approve/${loan._id}`);
-      
-      if (res.data.success) {
-        alert("✅ Loan Disbursed! Status updated to 'Disbursed'.");
-        fetchPendingLoans(); 
-      }
+      const res = await API.post('/admin/change-password', { userId, newPassword: newPass });
+      if (res.data.success) alert(`✅ Security Protocol: Password for ${name} updated!`);
     } catch (err) {
-      alert("Approval failed: " + (err.response?.data?.error || "Server Error"));
+      alert("❌ Reset failed. Ensure backend /admin/change-password is active.");
     }
   };
 
+  const handleApprove = async (loan) => {
+    if (!window.confirm(`Disburse ₹${loan.netDisbursed} to ${loan.customerName}?`)) return;
+    try {
+      const res = await API.post(`/accountant/approve/${loan._id}`);
+      if (res.data.success) { alert("✅ Disbursed!"); fetchData(); }
+    } catch (err) { alert("Error: " + err.message); }
+  };
+
+  // Search Logic (Name, Mobile, or Role)
+  const filteredUsers = allUsers.filter(u => 
+    u.fullName?.toLowerCase().includes(searchTerm.toLowerCase()) || 
+    u.mobile?.includes(searchTerm) ||
+    u.role?.toLowerCase().includes(searchTerm.toLowerCase())
+  );
+
   return (
     <div style={{ padding: '25px', background: '#f8fafc', minHeight: '100vh' }}>
+      
+      {/* --- HEADER --- */}
       <div style={headerStyle}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '15px' }}>
           <div>
-            <h2 style={{ margin: 0, color: '#1e293b', fontWeight: '900', letterSpacing: '-1px' }}>🛡️ DISBURSEMENT QUEUE</h2>
-            <p style={{ color: '#64748b', fontSize: '13px', fontWeight: '600' }}>Active Session: {user.fullName} ({user.role})</p>
+            <h2 style={{ margin: 0, color: '#0f172a', fontWeight: '900', fontSize: '28px', letterSpacing: '-1.5px' }}>
+               {masterMode ? "🌐 MASTER USER CONTROL" : "🛡️ ADMIN AUTHORITY"}
+            </h2>
+            <p style={{ color: '#64748b', fontSize: '11px', fontWeight: 'bold', textTransform: 'uppercase' }}>
+               {masterMode ? "Full System Access: Admins, Staff & Customers" : "Disbursement Queue & Verifications"}
+            </p>
           </div>
-          <button onClick={fetchPendingLoans} style={refreshBtn}>🔄 Refresh Pool</button>
+
+          <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
+            <button 
+              onClick={() => setMasterMode(!masterMode)} 
+              style={{ ...modeBtn, background: masterMode ? '#ef4444' : '#0f172a', color: '#fff' }}
+            >
+              {masterMode ? <FiToggleRight size={22}/> : <FiToggleLeft size={22}/>}
+              {masterMode ? "CLOSE MASTER" : "GO MASTER"}
+            </button>
+            <button onClick={fetchData} style={refreshBtn}><FiRefreshCw /></button>
+          </div>
         </div>
       </div>
 
-      {loading ? (
-        <div style={loaderStyle}>🔄 Fetching verified reports from Atlas...</div>
-      ) : loans.length === 0 ? (
-        <div style={emptyStyle}>
-          <p style={{ fontSize: '24px' }}>✅</p>
-          <p>Sab clear hai! Filhal koi pending file nahi hai.</p>
-          <small style={{ color: '#94a3b8' }}>Verified files will appear here after Advisor submission.</small>
+      {/* --- SEARCH (Only in Master Mode) --- */}
+      {masterMode && (
+        <div style={searchContainer}>
+          <FiSearch color="#94a3b8" />
+          <input 
+            placeholder="Search by Name, Mobile or Role (Admin, Accountant, User)..." 
+            style={searchInput}
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+          />
         </div>
+      )}
+
+      {loading ? (
+        <div style={loaderStyle}>READING MASTER DATABASE...</div>
       ) : (
         <div style={gridStyle}>
-          {loans.map((loan) => (
+          
+          {/* --- VIEW 1: MASTER MODE (Sare Users) --- */}
+          {masterMode && filteredUsers.map((u) => {
+            const isMe = u.mobile === currentUser.mobile;
+            return (
+              <div key={u._id} style={{...userCard, border: isMe ? '2.5px solid #2563eb' : '1.5px solid #0f172a'}}>
+                <div style={cardHeader}>
+                  <div style={roleBadge(u.role)}>
+                    {u.role === 'Admin' ? <FiShield/> : u.role === 'Accountant' ? <FiBriefcase/> : <FiUser/>}
+                    {u.role}
+                  </div>
+                  {isMe && <span style={meBadge}>YOU</span>}
+                </div>
+                
+                <h3 style={{ margin: '15px 0 5px 0', fontSize: '18px', fontWeight: '900' }}>{u.fullName}</h3>
+                <p style={{ margin: 0, color: '#64748b', fontSize: '13px', fontWeight: 'bold' }}>📞 {u.mobile}</p>
+                <p style={{ margin: '5px 0 0 0', color: '#94a3b8', fontSize: '10px' }}>ID: {u._id}</p>
+                
+                <div style={{ marginTop: '20px', display: 'flex', gap: '8px' }}>
+                  <button onClick={() => handleResetPassword(u._id, u.fullName)} style={masterResetBtn}>
+                     <FiLock /> Force Password Reset
+                  </button>
+                </div>
+              </div>
+            );
+          })}
+
+          {/* --- VIEW 2: DISBURSEMENT MODE (Pending Loans) --- */}
+          {!masterMode && (loans.length > 0 ? loans.map((loan) => (
             <div key={loan._id} style={cardStyle}>
               <div style={cardHeader}>
-                <span style={idBadge}>LOAN ID: {loan.loanId}</span>
-                <span style={statusBadge}>{loan.status}</span>
+                <span style={idBadge}>LOAN: {loan.loanId}</span>
+                <span style={statusBadge(loan.status)}>{loan.status}</span>
               </div>
 
               <h3 style={nameStyle}>{loan.customerName}</h3>
               
               <div style={infoRow}>
-                <div>
-                  <label style={labelStyle}>PRINCIPAL</label>
-                  <p style={valStyle}>₹{loan.amount}</p>
-                </div>
-                <div style={{ textAlign: 'right' }}>
-                  <label style={labelStyle}>NET DISBURSE</label>
-                  <p style={{ ...valStyle, color: '#059669' }}>₹{loan.netDisbursed}</p>
-                </div>
-              </div>
-
-              <div style={detailGrid}>
-                <div style={detailItem}>
-                  <label style={labelStyle}>WEEKLY EMI</label>
-                  <p style={{ fontWeight: 'bold', color: '#1e293b' }}>₹{loan.weeklyEMI}</p>
-                </div>
-                <div style={detailItem}>
-                  <label style={labelStyle}>TENURE</label>
-                  <p style={{ fontWeight: 'bold', color: '#1e293b' }}>{loan.totalWeeks} Weeks</p>
-                </div>
+                <div><label style={labelStyle}>PAYOUT</label><p style={{...valStyle, color: '#059669'}}>₹{loan.netDisbursed || 0}</p></div>
+                <div style={{textAlign: 'right'}}><label style={labelStyle}>EMI</label><p style={valStyle}>₹{loan.weeklyEMI}</p></div>
               </div>
 
               <div style={advisorBox}>
-                <p style={{ margin: 0 }}>📍 <b>Verified By:</b> {loan.verifiedByName || "Advisor"}</p>
-                <p style={{ margin: '5px 0 0 0', fontSize: '11px' }}><b>Inspection:</b> {loan.houseType} house in {loan.areaType} area.</p>
+                <p style={{ margin: 0, fontWeight: '700', fontSize: '12px' }}>📍 Verified: {loan.verifiedByName || "Officer"}</p>
+                <button onClick={() => handleResetPassword(loan.customerId, loan.customerName)} style={quickPassBtn}>
+                   <FiLock size={12}/> Pass
+                </button>
               </div>
 
-              <div style={actionRow}>
-                <button 
-                  onClick={() => handleApprove(loan)} 
-                  style={approveBtn}
-                >
-                  Confirm & Release Funds
-                </button>
-                <button style={rejectBtn}>Reject</button>
-              </div>
+              <button 
+                onClick={() => handleApprove(loan)} 
+                style={{...approveBtn, opacity: loan.status.includes('Pending') ? 0.5 : 1}}
+                disabled={loan.status.includes('Pending')}
+              >
+                {loan.status.includes('Pending') ? 'In Verification' : 'Confirm Disbursement'}
+              </button>
             </div>
-          ))}
+          )) : <div style={emptyStyle}>Disbursement Queue is Empty.</div>)}
+
         </div>
       )}
     </div>
   );
 };
 
-// --- Styles (Modern Fintech UI) ---
-const headerStyle = { marginBottom: '35px', paddingBottom: '20px', borderBottom: '2px solid #e2e8f0' };
-const refreshBtn = { background: '#fff', border: '1px solid #e2e8f0', padding: '8px 15px', borderRadius: '10px', fontSize: '12px', fontWeight: 'bold', cursor: 'pointer' };
-const gridStyle = { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(350px, 1fr))', gap: '25px' };
-const cardStyle = { background: '#fff', padding: '25px', borderRadius: '24px', border: '1px solid #f1f5f9', boxShadow: '0 10px 15px -3px rgba(0,0,0,0.02)' };
-const cardHeader = { display: 'flex', justifyContent: 'space-between', marginBottom: '20px', alignItems: 'center' };
-const idBadge = { background: '#f8fafc', padding: '5px 12px', borderRadius: '8px', fontSize: '11px', fontWeight: '900', color: '#64748b', border: '1px solid #e2e8f0' };
-const statusBadge = { color: '#2563eb', fontSize: '10px', fontWeight: '900', textTransform: 'uppercase', background: '#eff6ff', padding: '4px 10px', borderRadius: '20px' };
-const nameStyle = { fontSize: '20px', margin: '0 0 20px 0', color: '#0f172a', fontWeight: '900', letterSpacing: '-0.5px' };
-const infoRow = { display: 'flex', justifyContent: 'space-between', background: '#f0fdf4', padding: '15px', borderRadius: '16px', marginBottom: '20px', border: '1px solid #dcfce7' };
-const labelStyle = { fontSize: '9px', color: '#94a3b8', fontWeight: '900', textTransform: 'uppercase', letterSpacing: '0.5px' };
-const valStyle = { fontSize: '18px', fontWeight: '900', margin: '4px 0' };
-const detailGrid = { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px', marginBottom: '20px' };
-const detailItem = { background: '#f8fafc', padding: '12px', borderRadius: '12px', border: '1px solid #f1f5f9' };
-const advisorBox = { background: '#fff9f2', padding: '12px', borderRadius: '12px', fontSize: '12px', color: '#92400e', marginBottom: '25px', border: '1px solid #ffedd5' };
-const actionRow = { display: 'flex', gap: '12px' };
-const approveBtn = { flex: 2, padding: '16px', background: '#0f172a', color: '#fff', border: 'none', borderRadius: '14px', fontWeight: '900', cursor: 'pointer', fontSize: '13px' };
-const rejectBtn = { flex: 1, padding: '16px', background: '#fff', color: '#ef4444', border: '1.5px solid #fee2e2', borderRadius: '14px', fontWeight: '900', cursor: 'pointer', fontSize: '13px' };
-const loaderStyle = { textAlign: 'center', padding: '100px', color: '#64748b', fontWeight: 'bold' };
-const emptyStyle = { textAlign: 'center', padding: '100px 20px', background: '#fff', borderRadius: '32px', color: '#059669', fontWeight: '900' };
+// --- STYLES ---
+const headerStyle = { marginBottom: '25px', paddingBottom: '20px', borderBottom: '1px solid #e2e8f0' };
+const refreshBtn = { background: '#fff', border: '1px solid #e2e8f0', padding: '12px', borderRadius: '15px', cursor: 'pointer', display: 'flex', alignItems: 'center' };
+const modeBtn = { display: 'flex', alignItems: 'center', gap: '10px', padding: '12px 20px', borderRadius: '15px', fontSize: '12px', fontWeight: '900', cursor: 'pointer', border: 'none', transition: '0.3s' };
+const searchContainer = { display: 'flex', alignItems: 'center', gap: '12px', background: '#fff', padding: '18px 25px', borderRadius: '25px', marginBottom: '30px', border: '1.5px solid #e2e8f0' };
+const searchInput = { border: 'none', outline: 'none', width: '100%', fontSize: '14px', fontWeight: 'bold', color: '#0f172a' };
+const gridStyle = { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '20px' };
+const userCard = { background: '#fff', padding: '25px', borderRadius: '30px', boxShadow: '0 10px 20px rgba(0,0,0,0.05)' };
+const meBadge = { background: '#2563eb', color: '#fff', padding: '4px 10px', borderRadius: '8px', fontSize: '10px', fontWeight: '900' };
+const masterResetBtn = { flex: 1, background: '#0f172a', color: '#fff', border: 'none', padding: '14px', borderRadius: '14px', fontSize: '11px', fontWeight: 'bold', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', width: '100%' };
+const roleBadge = (role) => ({
+  display: 'flex', alignItems: 'center', gap: '6px', fontSize: '9px', fontWeight: '900', textTransform: 'uppercase', padding: '5px 12px', borderRadius: '12px',
+  background: role === 'Admin' ? '#fee2e2' : role === 'Accountant' ? '#dbeafe' : '#f0fdf4',
+  color: role === 'Admin' ? '#ef4444' : role === 'Accountant' ? '#2563eb' : '#16a34a'
+});
+const cardStyle = { background: '#fff', padding: '25px', borderRadius: '30px', border: '1px solid #f1f5f9', boxShadow: '0 4px 6px rgba(0,0,0,0.02)' };
+const cardHeader = { display: 'flex', justifyContent: 'space-between', alignItems: 'center' };
+const idBadge = { background: '#f1f5f9', padding: '6px 12px', borderRadius: '10px', fontSize: '10px', fontWeight: '900', color: '#64748b' };
+const statusBadge = (s) => ({ fontSize: '9px', fontWeight: '900', textTransform: 'uppercase', padding: '5px 12px', borderRadius: '20px', background: s.includes('Pending') ? '#fff7ed' : '#f0fdf4', color: s.includes('Pending') ? '#c2410c' : '#16a34a' });
+const nameStyle = { fontSize: '22px', margin: '15px 0', color: '#0f172a', fontWeight: '900', letterSpacing: '-0.5px' };
+const infoRow = { display: 'flex', justifyContent: 'space-between', background: '#f0fdf4', padding: '18px', borderRadius: '20px', marginBottom: '15px' };
+const labelStyle = { fontSize: '9px', color: '#94a3b8', fontWeight: '900', textTransform: 'uppercase' };
+const valStyle = { fontSize: '20px', fontWeight: '900', margin: 0 };
+const advisorBox = { background: '#f8fafc', padding: '15px', borderRadius: '18px', marginBottom: '20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' };
+const quickPassBtn = { background: '#fff', border: '1px solid #e2e8f0', padding: '8px 12px', borderRadius: '10px', fontSize: '10px', fontWeight: '900', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '5px' };
+const approveBtn = { width: '100%', padding: '18px', background: '#0f172a', color: '#fff', border: 'none', borderRadius: '18px', fontWeight: '900', cursor: 'pointer' };
+const loaderStyle = { textAlign: 'center', padding: '100px', fontWeight: '900', color: '#94a3b8', letterSpacing: '2px' };
+const emptyStyle = { textAlign: 'center', padding: '100px', background: '#fff', borderRadius: '32px', color: '#94a3b8', fontWeight: 'bold', gridColumn: '1/-1' };
 
 export default AdminApproval;

@@ -217,105 +217,254 @@ app.patch('/api/loans/:id', verifyToken, async (req, res) => {
 
 // --- 6. ACCOUNTANT & ADMIN DASHBOARD ---
 
+// ==========================================
+// 🛠️ FIXES FOR ADMIN ANALYTICS & MANAGEMENT
+// ==========================================
 
-app.get('/api/accountant/pending', verifyToken, async (req, res) => {
+// 1. DASHBOARD STATS (For Graphs)
+app.get('/api/admin/stats', verifyToken, async (req, res) => {
     try {
-        const role = req.user.role.toLowerCase();
-        if (role !== 'accountant' && role !== 'admin') {
-            return res.status(403).json({ error: "Access Denied" });
+        if (req.user.role !== 'Admin') return res.status(403).json({ error: "Admin Only" });
+        
+        const loans = await Loan.find({});
+        const customerCount = await User.countDocuments({ role: 'Customer' });
+        
+        // Total Disbursed Calculation
+        const totalDisbursed = loans
+            .filter(l => l.status === 'Disbursed')
+            .reduce((sum, l) => sum + (l.amount || 0), 0);
+            
+        // Total Recovery Calculation (Approved Payments)
+        let totalRecovered = 0;
+        loans.forEach(loan => {
+            loan.repaymentHistory?.forEach(pay => {
+                if (pay.status === 'Approved') totalRecovered += (pay.amount || 0);
+            });
+        });
+
+        res.json({ totalDisbursed, totalRecovered, customerCount });
+    } catch (err) { res.status(500).json({ error: "Stats sync error" }); }
+});
+
+// 2. SEPARATE CUSTOMER LIST
+app.get('/api/admin/all-customers', verifyToken, async (req, res) => {
+    try {
+        if (req.user.role !== 'Admin') return res.status(403).json({ error: "Admin Only" });
+        const customers = await User.find({ role: 'Customer' }).select('-password').sort({ createdAt: -1 });
+        res.json(customers);
+    } catch (err) { res.status(500).json({ error: "Customers fetch error" }); }
+});
+
+// 3. ALL STAFF LIST (Admins, Accountants, Advisors)
+app.get('/api/admin/all-staff', verifyToken, async (req, res) => {
+    try {
+        if (req.user.role !== 'Admin') return res.status(403).json({ error: "Admin Only" });
+        const staff = await User.find({ role: { $ne: 'Customer' } }).select('-password').sort({ role: 1 });
+        res.json(staff);
+    } catch (err) { res.status(500).json({ error: "Staff fetch error" }); }
+});
+
+// 4. UTR PAYMENT APPROVAL (Very Important)
+app.post('/api/admin/approve-payment', verifyToken, async (req, res) => {
+    try {
+        if (req.user.role !== 'Admin' && req.user.role !== 'Accountant') return res.status(403).json({ error: "Unauthorized" });
+        
+        const { loanId, paymentId } = req.body;
+        const loan = await Loan.findOne({ loanId: loanId });
+        
+        if (!loan) return res.status(404).json({ error: "Loan record not found" });
+
+        // Payment status ko update karna
+        const payment = loan.repaymentHistory.id(paymentId);
+        if (payment) {
+            payment.status = 'Approved';
+            // Total Pending Amount kam karna
+            loan.totalPending = Math.max(0, (loan.totalPending || 0) - payment.amount);
+            await loan.save();
+            res.json({ success: true, message: "Payment Verified & Approved!" });
+        } else {
+            res.status(404).json({ error: "Payment ID not found" });
         }
-        const loans = await Loan.find({ status: 'Field Verified' }).sort({ updatedAt: -1 });
-        res.json(loans);
-    } catch (err) { res.status(500).json({ error: "Accountant fetch error" }); }
+    } catch (err) { res.status(500).json({ error: "Approval failed: " + err.message }); }
 });
 
-app.get('/api/user/my-dashboard', verifyToken, async (req, res) => {
+// 5. DAILY COLLECTION REPORT
+app.get('/api/admin/collection-report', verifyToken, async (req, res) => {
     try {
-        const officerId = req.user.id;
-        const unassigned = await Loan.countDocuments({ 
-            isAssigned: false, 
-            status: { $in: ['Applied', 'Hold - Pending Assignment'] } 
+        const today = new Date().setHours(0, 0, 0, 0);
+        const loans = await Loan.find({ "repaymentHistory.status": "Approved" });
+        
+        let report = [];
+        loans.forEach(loan => {
+            loan.repaymentHistory.forEach(pay => {
+                const payDate = new Date(pay.date).setHours(0, 0, 0, 0);
+                if (payDate === today && pay.status === 'Approved') {
+                    report.push({
+                        _id: pay._id,
+                        loanId: loan.loanId,
+                        customerName: loan.customerName,
+                        amount: pay.amount,
+                        utr: pay.utr,
+                        paymentDate: pay.date,
+                        method: "UPI / QR"
+                    });
+                }
+            });
         });
-        const pending = await Loan.countDocuments({ 
-            fieldOfficerId: officerId, 
-            status: { $in: ['Pending Verification', 'Verification Pending'] } 
-        });
-
-        res.json({ success: true, stats: { pending, unassigned } });
-    } catch (err) { res.status(500).json({ error: "Dashboard stats failed" }); }
+        res.json(report);
+    } catch (err) { res.status(500).json({ error: "Report failed" }); }
 });
 
-// Fix for Admin Performance Page
-app.get('/api/admin/all-users', verifyToken, async (req, res) => {
+// 6. DELETE USER ROUTE
+app.delete('/api/admin/users/:id', verifyToken, async (req, res) => {
     try {
-        const users = await User.find({}).select('-password');
-        res.json(users);
-    } catch (err) { res.status(500).json({ error: "Users fetch error" }); }
+        if (req.user.role !== 'Admin') return res.status(403).json({ error: "Admin Only" });
+        await User.findByIdAndDelete(req.params.id);
+        res.json({ success: true, message: "User deleted" });
+    } catch (err) { res.status(500).json({ error: "Delete failed" }); }
 });
 
+// ==========================================
+// 🛠️ ADMIN MASTER CONTROL ROUTES (FIXED)
+// ==========================================
+
+// 1. Dashboard Stats (Graphs aur Cards ke liye)
+app.get('/api/admin/stats', verifyToken, async (req, res) => {
+    try {
+        const loans = await Loan.find({});
+        const customerCount = await User.countDocuments({ role: { $in: ['Customer', 'customer'] } });
+        
+        // Total Disbursed (Sirf wahi jo Disbursed ho chuke hain)
+        const totalDisbursed = loans
+            .filter(l => l.status === 'Disbursed')
+            .reduce((sum, l) => sum + (l.amount || 0), 0);
+            
+        // Total Recovery (Sirf 'Approved' payments ka sum)
+        let totalRecovered = 0;
+        loans.forEach(loan => {
+            loan.repaymentHistory?.forEach(pay => {
+                if (pay.status === 'Approved') totalRecovered += (pay.amount || 0);
+            });
+        });
+
+        res.json({ totalDisbursed, totalRecovered, customerCount });
+    } catch (err) { res.status(500).json({ error: "Stats error" }); }
+});
+
+// 2. All Customers List (Sirf customers dikhane ke liye)
+app.get('/api/admin/all-customers', verifyToken, async (req, res) => {
+    try {
+        // Case-insensitive check for 'Customer'
+        const customers = await User.find({ 
+            role: { $regex: /customer/i } 
+        }).select('-password').sort({ createdAt: -1 });
+        res.json(customers);
+    } catch (err) { res.status(500).json({ error: "Customer fetch error" }); }
+});
+
+// 3. All Staff List (Admin, Accountant, Advisors)
+app.get('/api/admin/all-staff', verifyToken, async (req, res) => {
+    try {
+        const staff = await User.find({ 
+            role: { $not: { $regex: /customer/i } } 
+        }).select('-password').sort({ role: 1 });
+        res.json(staff);
+    } catch (err) { res.status(500).json({ error: "Staff fetch error" }); }
+});
+
+// 4. Daily Collection Report (Aaj ki approved recovery)
+app.get('/api/admin/collection-report', verifyToken, async (req, res) => {
+    try {
+        const today = new Date().setHours(0, 0, 0, 0);
+        const loans = await Loan.find({ "repaymentHistory.status": "Approved" });
+        
+        let report = [];
+        loans.forEach(loan => {
+            loan.repaymentHistory.forEach(pay => {
+                const payDate = new Date(pay.date).setHours(0, 0, 0, 0);
+                if (payDate === today && pay.status === 'Approved') {
+                    report.push({
+                        _id: pay._id,
+                        loanId: loan.loanId,
+                        customerName: loan.customerName,
+                        amount: pay.amount,
+                        utr: pay.utr,
+                        date: pay.date,
+                        method: "UPI / QR"
+                    });
+                }
+            });
+        });
+        res.json(report);
+    } catch (err) { res.status(500).json({ error: "Report failed" }); }
+});
+
+// 5. UTR Payment Approval Logic (Most Important)
+app.post('/api/admin/approve-payment', verifyToken, async (req, res) => {
+    try {
+        const { loanId, paymentId } = req.body;
+        // Loan dhundo chahe ID LN- se ho ya MongoDB ID ho
+        const loan = await Loan.findOne({ loanId: loanId });
+        
+        if (!loan) return res.status(404).json({ error: "Loan not found" });
+
+        const payment = loan.repaymentHistory.id(paymentId);
+        if (payment) {
+            payment.status = 'Approved';
+            // Total balance kam karna
+            loan.totalPending = Math.max(0, (loan.totalPending || 0) - payment.amount);
+            await loan.save();
+            res.json({ success: true, message: "Payment Approved!" });
+        } else {
+            res.status(404).json({ error: "Payment record missing" });
+        }
+    } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// 6. Bulk Delete User
+app.delete('/api/admin/users/:id', verifyToken, async (req, res) => {
+    try {
+        await User.findByIdAndDelete(req.params.id);
+        res.json({ success: true });
+    } catch (err) { res.status(500).json({ error: "Delete failed" }); }
+});
+// Add this in server.js under Admin Master Control section
 app.get('/api/admin/all-loans', verifyToken, async (req, res) => {
     try {
         const loans = await Loan.find({}).sort({ createdAt: -1 });
         res.json(loans);
-    } catch (err) { res.status(500).json({ error: "Loans fetch error" }); }
-});
-// --- ADMIN: MASTER CONTROL ROUTES ---
-// server.js mein check karein
-app.post('/api/accountant/approve/:id', verifyToken, async (req, res) => {
-    try {
-        const { id } = req.params;
-        const updatedLoan = await Loan.findByIdAndUpdate(
-            id, 
-            { status: 'Disbursed', disbursedAt: new Date() }, 
-            { new: true }
-        );
-
-        if (!updatedLoan) return res.status(404).json({ error: "Loan not found" });
-
-        res.json({ success: true, message: "Funds Disbursed Locally!", loan: updatedLoan });
     } catch (err) {
-        res.status(500).json({ error: "Server Error: " + err.message });
+        res.status(500).json({ error: "Fetch error" });
     }
 });
-// 1. Fix: /admin/approvals (Shows loans ready for Admin's final look)
-app.get('/api/admin/pending-approvals', verifyToken, async (req, res) => {
+// adminroutes.js ya server.js mein
+app.post('/api/admin/change-password', verifyToken, async (req, res) => {
     try {
         if (req.user.role !== 'Admin') return res.status(403).json({ error: "Admin Only" });
-        // Wo saare loans jo Advisor ne verify kar diye hain ya Accountant ke paas hain
-        const loans = await Loan.find({ 
-            status: { $in: ['Field Verified', 'Pending Accountant Approval', 'Applied'] } 
-        }).sort({ createdAt: -1 });
-        res.json(loans);
-    } catch (err) { res.status(500).json({ error: "Fetch Error" }); }
-});
 
-// 2. Fix: /admin/advisor-performance (Calculates stats per Advisor)
-app.get('/api/admin/advisor-stats', verifyToken, async (req, res) => {
+        const { userId, newPassword } = req.body;
+
+        // Password hash karna zaroori hai (bcrypt use karein)
+        const salt = await bcrypt.genSalt(10);
+        const hashedPassword = await bcrypt.hash(newPassword, salt);
+
+        await User.findByIdAndUpdate(userId, { password: hashedPassword });
+
+        res.json({ success: true, message: "Password updated successfully!" });
+    } catch (err) {
+        res.status(500).json({ error: "Password update failed" });
+    }
+});
+// Sabhi users (Admin, Staff, Customer) ko fetch karne ke liye
+app.get('/api/admin/all-users-absolute', verifyToken, async (req, res) => {
     try {
-        if (req.user.role !== 'Admin') return res.status(403).json({ error: "Admin Only" });
-        
-        // Sabhi Advisors (User role) nikalna
-        const advisors = await User.find({ role: { $in: ['User', 'FieldOfficer'] } });
-        
-        const performanceData = await Promise.all(advisors.map(async (adv) => {
-            const assigned = await Loan.countDocuments({ fieldOfficerId: adv._id });
-            const verified = await Loan.countDocuments({ fieldOfficerId: adv._id, status: 'Field Verified' });
-            const disbursed = await Loan.countDocuments({ fieldOfficerId: adv._id, status: 'Disbursed' });
-            
-            return {
-                advisorName: adv.fullName,
-                mobile: adv.mobile,
-                assigned,
-                verified,
-                disbursed,
-                commission: disbursed * 500 // Example: ₹500 per disbursement
-            };
-        }));
-        
-        res.json(performanceData);
-    } catch (err) { res.status(500).json({ error: "Performance Sync Error" }); }
+        // .find({}) ka matlab hai bina kisi filter ke sare users
+        const users = await User.find({}).select('-password').sort({ role: 1 });
+        res.json(users);
+    } catch (err) {
+        res.status(500).json({ error: "Master fetch error" });
+    }
 });
-
 // 3. Fix: Accountant Add Karne Ka Logic (Signup Route Update)
 // Note: Aapka existing signup route hi kaam karega, bas dropdown mein 'Accountant' role bhejiye.
 

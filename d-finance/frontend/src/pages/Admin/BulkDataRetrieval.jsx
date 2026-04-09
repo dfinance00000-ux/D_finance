@@ -1,86 +1,171 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
+import API from '../../api/axios';
+import { FiDownload, FiDatabase, FiFileText, FiAlertCircle, FiRefreshCw } from 'react-icons/fi';
 
 const BulkDataRetrieval = () => {
   const [loans, setLoans] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(false);
 
-  useEffect(() => {
-    fetch('http://localhost:5000/loans')
-      .then(res => res.json())
-      .then(data => {
-        setLoans(data);
-        setLoading(false);
-      });
+  // 🚀 Fetch Logic optimized with useCallback
+  const fetchBulkData = useCallback(async () => {
+    try {
+      setLoading(true);
+      setError(false);
+      
+      // ✅ Console fix: Path change from '/admin/all-loans' to '/loans' if prefix is missing
+      // Humesha apne base API route ke hisaab se check karein
+      const res = await API.get('/admin/all-loans'); 
+      
+      const data = Array.isArray(res.data) ? res.data : [];
+      setLoans(data);
+    } catch (err) {
+      console.error("Bulk Retrieval Error:", err);
+      setError(true);
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
+  useEffect(() => {
+    fetchBulkData();
+  }, [fetchBulkData]);
+
+  // 📥 CSV Download Logic (Excel Optimized)
   const downloadCSV = () => {
-    const headers = ["LoanID", "Customer", "Amount", "Status", "HouseType", "Occupation", "Advisor"];
+    if (loans.length === 0) return alert("No records found to export.");
+
+    const headers = ["LOAN_ID", "CUSTOMER", "MOBILE", "AMOUNT", "STATUS", "HOUSE_TYPE", "OCCUPATION", "OFFICER", "DATE"];
+    
     const rows = loans.map(l => [
-      l.id, l.customerName, l.amount, l.status, 
-      l.houseType || 'N/A', l.occupationSubCategory || 'N/A', l.verifiedByName || 'N/A'
+      `"${l.loanId || l._id}"`,
+      `"${l.customerName || 'N/A'}"`,
+      `"${l.customerMobile || '---'}"`,
+      l.amount || 0,
+      `"${l.status}"`,
+      `"${l.houseType || 'N/A'}"`,
+      `"${l.occupationSubCategory || 'N/A'}"`,
+      `"${l.fieldOfficerName || l.verifiedByName || 'System'}"`,
+      `"${new Date(l.createdAt).toLocaleDateString('en-IN')}"`
     ]);
 
-    let csvContent = "data:text/csv;charset=utf-8," 
+    // Added \uFEFF for UTF-8 support in MS Excel
+    let csvContent = "data:text/csv;charset=utf-8,\uFEFF" 
       + headers.join(",") + "\n" 
       + rows.map(e => e.join(",")).join("\n");
 
     const encodedUri = encodeURI(csvContent);
     const link = document.createElement("a");
     link.setAttribute("href", encodedUri);
-    link.setAttribute("download", `LUC_Bulk_Report_${new Date().toLocaleDateString()}.csv`);
+    link.setAttribute("download", `Mathura_LUC_Audit_${new Date().toISOString().split('T')[0]}.csv`);
     document.body.appendChild(link);
     link.click();
+    document.body.removeChild(link);
   };
 
   return (
-    <div className="p-8">
-      <div className="flex justify-between items-center mb-8 bg-white p-6 rounded-xl shadow-sm border border-gray-100">
-        <div>
-          <h2 className="text-2xl font-bold text-slate-800">📥 Bulk Data Retrieval</h2>
-          <p className="text-sm text-slate-500">SOP Point 3: Federal Bank Audit & LUC Reporting Section</p>
+    <div className="animate-fadeIn space-y-6">
+      
+      {/* --- Header & Export Action --- */}
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-white p-6 rounded-[2rem] border border-slate-100 shadow-sm">
+        <div className="flex items-center gap-4">
+          <div className="bg-blue-50 p-4 rounded-2xl text-blue-600">
+            <FiDatabase className="text-2xl" />
+          </div>
+          <div>
+            <h2 className="text-xl font-black text-slate-800 uppercase tracking-tighter">Federal Bank Master Audit</h2>
+            <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">SOP Point 3: Loan Utilization Check (LUC) reporting</p>
+          </div>
         </div>
-        <button 
-          onClick={downloadCSV}
-          className="bg-emerald-600 hover:bg-emerald-700 text-white px-6 py-2 rounded-lg font-bold transition shadow-lg shadow-emerald-200"
-        >
-          Download All LUC Reports (.CSV)
-        </button>
+        
+        <div className="flex gap-2 w-full md:w-auto">
+          <button onClick={fetchBulkData} className="p-4 bg-slate-50 text-slate-400 rounded-2xl hover:bg-slate-100 transition-all">
+            <FiRefreshCw className={loading ? 'animate-spin' : ''} />
+          </button>
+          <button 
+            onClick={downloadCSV}
+            disabled={loading || loans.length === 0}
+            className="flex-grow md:flex-grow-0 flex items-center justify-center gap-3 bg-slate-900 hover:bg-emerald-600 text-white px-8 py-4 rounded-2xl font-black text-[10px] uppercase tracking-widest transition-all shadow-xl disabled:opacity-50 disabled:bg-slate-200"
+          >
+            <FiDownload className="text-lg" /> Export Master CSV
+          </button>
+        </div>
       </div>
 
-      <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
-        <table className="w-full text-left border-collapse">
-          <thead className="bg-slate-50 border-b border-gray-100">
-            <tr>
-              <th className="p-4 text-xs font-bold text-slate-500 uppercase">Loan ID</th>
-              <th className="p-4 text-xs font-bold text-slate-500 uppercase">Customer</th>
-              <th className="p-4 text-xs font-bold text-slate-500 uppercase">Status</th>
-              <th className="p-4 text-xs font-bold text-slate-500 uppercase">Field Data</th>
-              <th className="p-4 text-xs font-bold text-slate-500 uppercase">Verified By</th>
-            </tr>
-          </thead>
-          <tbody>
-            {loans.map(loan => (
-              <tr key={loan.id} className="border-b border-gray-50 hover:bg-slate-50 transition">
-                <td className="p-4 text-sm font-medium">{loan.id}</td>
-                <td className="p-4">
-                  <div className="text-sm font-bold text-slate-700">{loan.customerName}</div>
-                  <div className="text-xs text-slate-400">₹{loan.amount}</div>
-                </td>
-                <td className="p-4">
-                  <span className={`px-2 py-1 rounded text-[10px] font-bold uppercase ${
-                    loan.status === 'Approved' ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700'
-                  }`}>
-                    {loan.status}
-                  </span>
-                </td>
-                <td className="p-4 text-xs text-slate-600">
-                  {loan.houseType ? `${loan.houseType} | ${loan.occupationSubCategory}` : 'Visit Pending'}
-                </td>
-                <td className="p-4 text-xs font-bold text-slate-500">{loan.verifiedByName || '-'}</td>
+      {/* --- Main Audit Table --- */}
+      <div className="bg-white rounded-[2.5rem] border border-slate-100 shadow-sm overflow-hidden">
+        <div className="overflow-x-auto">
+          <table className="w-full text-left border-collapse">
+            <thead>
+              <tr className="bg-slate-50/50 text-[10px] font-black uppercase text-slate-400 tracking-widest">
+                <th className="p-6">Loan Identity</th>
+                <th className="p-6">Portfolio Details</th>
+                <th className="p-6">Field Intelligence</th>
+                <th className="p-6">Compliance Status</th>
+                <th className="p-6 text-right">LUC Officer</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody className="divide-y divide-slate-50">
+              {loading ? (
+                <tr><td colSpan="5" className="p-32 text-center font-bold text-slate-300 animate-pulse text-[10px] uppercase tracking-[0.3em]">Accessing Federal Ledger...</td></tr>
+              ) : error ? (
+                <tr>
+                  <td colSpan="5" className="p-20 text-center">
+                    <FiAlertCircle className="mx-auto text-3xl text-red-400 mb-2" />
+                    <p className="text-red-400 font-black uppercase text-[10px]">Data Fetch Failed (404/500)</p>
+                    <button onClick={fetchBulkData} className="mt-2 text-blue-600 font-bold text-[9px] uppercase underline">Try Again</button>
+                  </td>
+                </tr>
+              ) : loans.length > 0 ? (
+                loans.map(loan => (
+                  <tr key={loan._id || loan.loanId} className="hover:bg-slate-50/50 transition-colors group">
+                    <td className="p-6">
+                      <div className="font-black text-slate-900 text-sm tracking-tighter">{loan.loanId || 'NEW-LEAD'}</div>
+                      <div className="text-[9px] text-slate-400 font-bold">{new Date(loan.createdAt).toLocaleDateString()}</div>
+                    </td>
+                    <td className="p-6">
+                      <div className="text-sm font-black text-slate-700 uppercase">{loan.customerName}</div>
+                      <div className="text-[10px] text-blue-600 font-bold tracking-widest">₹{loan.amount?.toLocaleString()}</div>
+                    </td>
+                    <td className="p-6">
+                      {loan.houseType ? (
+                        <div className="space-y-1">
+                          <div className="text-[10px] font-black text-slate-600 uppercase">🏠 {loan.houseType}</div>
+                          <div className="text-[9px] font-bold text-slate-400">💼 {loan.occupationSubCategory}</div>
+                        </div>
+                      ) : <span className="text-[9px] font-black text-amber-500 uppercase italic bg-amber-50 px-2 py-1 rounded-md">Visit Required</span>}
+                    </td>
+                    <td className="p-6">
+                      <span className={`px-3 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-widest ${
+                        loan.status === 'Disbursed' ? 'bg-emerald-100 text-emerald-600' : 'bg-amber-100 text-amber-600'
+                      }`}>
+                        {loan.status}
+                      </span>
+                    </td>
+                    <td className="p-6 text-right">
+                       <span className="text-[10px] font-black text-slate-400 uppercase bg-slate-100 px-3 py-1.5 rounded-xl group-hover:bg-slate-900 group-hover:text-white transition-all">
+                          {loan.fieldOfficerName || loan.verifiedByName || 'Unassigned'}
+                       </span>
+                    </td>
+                  </tr>
+                ))
+              ) : (
+                <tr>
+                  <td colSpan="5" className="p-24 text-center">
+                    <FiFileText className="mx-auto text-5xl text-slate-100 mb-4" />
+                    <p className="text-slate-400 font-black uppercase italic text-xs tracking-widest">No matching audit records found.</p>
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div className="text-center pb-10">
+        <p className="text-[8px] text-slate-300 font-black uppercase tracking-[0.4em]">
+          End of Federal Audit Report • Mathura Branch Digital Ledger
+        </p>
       </div>
     </div>
   );
