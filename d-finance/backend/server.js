@@ -465,6 +465,28 @@ app.get('/api/admin/all-users-absolute', verifyToken, async (req, res) => {
         res.status(500).json({ error: "Master fetch error" });
     }
 });
+// backend/server.js mein ye add karo agar nahi hai
+app.get('/api/user/my-dashboard', verifyToken, async (req, res) => {
+    try {
+        const officerId = req.user.id;
+        
+        // Leads jo abhi tak kisi ne nahi li
+        const unassigned = await Loan.countDocuments({ 
+            isAssigned: false, 
+            status: { $in: ['Applied', 'Hold - Pending Assignment'] } 
+        });
+
+        // Leads jo is advisor (logged-in user) ke paas pending hain
+        const pending = await Loan.countDocuments({ 
+            fieldOfficerId: officerId, 
+            status: { $in: ['Pending Verification', 'Verification Pending'] } 
+        });
+
+        res.json({ success: true, stats: { pending, unassigned } });
+    } catch (err) {
+        res.status(500).json({ error: "Dashboard stats failed" });
+    }
+});
 // 3. Fix: Accountant Add Karne Ka Logic (Signup Route Update)
 // Note: Aapka existing signup route hi kaam karega, bas dropdown mein 'Accountant' role bhejiye.
 
