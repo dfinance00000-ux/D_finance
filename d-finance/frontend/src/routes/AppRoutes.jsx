@@ -33,7 +33,7 @@ import DailyCollectionReport from '../pages/Admin/DailyCollectionReport'; // Nay
 // User (Advisor) Pages
 import UserDashboard from '../pages/User/FieldOfficerDashboard';
 import AdvisorVerification from '../pages/Advisor/AdvisorVerification'; 
-
+import RegisterCustomer from '../pages/officer/RegisterCustomer';
 // Accountant Pages
 import AccountantApproval from '../pages/Accountant/AccountantApproval'; 
 
@@ -77,6 +77,7 @@ const AppRoutes = () => {
         <Route index element={<UserDashboard />} />
         <Route path="field-verification" element={<AdvisorVerification />} /> 
         <Route path="payouts" element={<AdvisorPerformance />} /> {/* Advisor bhi apna payout dekh sake */}
+        <Route path="register-customer" element={<RegisterCustomer />} />
         <Route path="my-team" element={<div className="p-10 font-bold text-gray-400 text-center">Advisor Tree Section</div>} />
       </Route>
 

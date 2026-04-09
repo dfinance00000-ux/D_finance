@@ -1,7 +1,9 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom'; // 🆕 Navigation ke liye zaroori
 import API from '../../api/axios'; 
 
 const FieldOfficerDashboard = () => {
+  const navigate = useNavigate(); // 🆕 Initialization
   const [stats, setStats] = useState({
     totalSales: 0,
     pendingCommission: 0,
@@ -12,7 +14,7 @@ const FieldOfficerDashboard = () => {
   const [loading, setLoading] = useState(true);
 
   // 🛠️ FETCH DATA FUNCTION
-  const fetchOfficerData = async () => {
+  const fetchOfficerData = useCallback(async () => {
     try {
       setLoading(true);
       
@@ -32,18 +34,17 @@ const FieldOfficerDashboard = () => {
       setOpenPool(resPool.data || []);
     } catch (err) {
       console.error("❌ Sync Error:", err.response?.data || err.message);
-      // Agar 403 aaye toh user ko logout ya alert dikha sakte hain
       if(err.response?.status === 403) {
           console.warn("Access Denied: Check if your role is set to 'user' in DB");
       }
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
     fetchOfficerData();
-  }, []);
+  }, [fetchOfficerData]);
 
   // 🤝 ACCEPT LOAN LOGIC
   const handleAcceptLoan = async (loanId) => {
@@ -74,19 +75,30 @@ const FieldOfficerDashboard = () => {
     <div className="space-y-8 animate-fadeIn p-4 max-w-7xl mx-auto pb-20">
       {/* --- Header Section --- */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 border-b border-slate-200 pb-6">
-         <div>
+          <div>
             <h2 className="text-3xl font-black text-slate-900 uppercase tracking-tighter">Officer Portal</h2>
             <div className="flex items-center gap-2 mt-1">
                 <div className="h-2 w-2 rounded-full bg-emerald-500 animate-ping"></div>
                 <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest">Live Agent: {JSON.parse(localStorage.getItem('user'))?.fullName || 'Active User'}</p>
             </div>
-         </div>
-         <button 
-            onClick={fetchOfficerData}
-            className="bg-white border-2 border-slate-200 hover:border-slate-800 text-slate-800 px-6 py-2 rounded-2xl text-[10px] font-black uppercase transition-all shadow-sm"
-         >
-            Refresh Market
-         </button>
+          </div>
+          
+          <div className="flex gap-3">
+            {/* 🆕 NAYA OPTION: REGISTER CUSTOMER BUTTON */}
+            <button 
+              onClick={() => navigate('/user/register-customer')}
+              className="bg-emerald-600 text-white px-6 py-3 rounded-2xl text-[10px] font-black uppercase shadow-lg shadow-emerald-200 transition-all hover:bg-emerald-700"
+            >
+              + Register New Customer
+            </button>
+
+            <button 
+              onClick={fetchOfficerData}
+              className="bg-white border-2 border-slate-200 hover:border-slate-800 text-slate-800 px-6 py-2 rounded-2xl text-[10px] font-black uppercase transition-all shadow-sm"
+            >
+              Refresh Market
+            </button>
+          </div>
       </div>
 
       {/* --- 📊 Performance Cards --- */}
