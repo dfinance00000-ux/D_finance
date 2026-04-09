@@ -94,6 +94,27 @@ app.post('/api/auth/login', async (req, res) => {
 
 // --- 4. LOAN SYSTEM (CUSTOMER & FILTERS) ---
 
+app.post('/api/loans/pay-manual/:loanId', verifyToken, async (req, res) => {
+    try {
+        const { utr, amount } = req.body;
+        const loan = await Loan.findOne({ loanId: req.params.loanId });
+
+        if (!loan) return res.status(404).json({ error: "Loan not found" });
+
+        // Payment request ko history mein dalo as 'Pending'
+        loan.repaymentHistory.push({
+            amount: amount,
+            utr: utr,
+            date: new Date(),
+            status: 'Pending'
+        });
+
+        await loan.save();
+        res.json({ success: true, message: "Payment logged for verification" });
+    } catch (err) {
+        res.status(500).json({ error: "Payment logging failed" });
+    }
+});
 app.post('/api/loans', verifyToken, async (req, res) => {
   try {
     const loanData = req.body;

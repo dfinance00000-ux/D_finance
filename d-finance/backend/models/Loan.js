@@ -71,16 +71,26 @@ const LoanSchema = new mongoose.Schema({
   totalPending: { type: Number }, 
   nextEmiDate: Date,
   
-  repaymentHistory: [
-    {
-      paymentId: String, 
-      orderId: String,   
-      amount: Number,
-      date: { type: Date, default: Date.now },
-      status: { type: String, default: 'Success' }
-    }
-  ],
+  // repaymentHistory: [
+  //   {
+  //     paymentId: String, 
+  //     orderId: String,   
+  //     amount: Number,
+  //     date: { type: Date, default: Date.now },
+  //     status: { type: String, default: 'Success' }
+  //   }
+  // ],
 
+  // models/Loan.js mein repaymentHistory array ko aise update karo
+repaymentHistory: [
+  {
+    amount: Number,
+    date: { type: Date, default: Date.now },
+    utr: String,        // Transaction ID (User bharega)
+    screenshot: String, // Screenshot ka URL
+    status: { type: String, default: 'Pending' } // Admin approve karega
+  }
+],
   // --- 🗓️ Metadata ---
   appliedDate: { type: Date, default: Date.now }
 }, { 
