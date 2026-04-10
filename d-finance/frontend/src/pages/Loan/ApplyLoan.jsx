@@ -1,7 +1,10 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import API from '../../api/axios'; 
-import { FiCamera, FiAlertCircle, FiChevronRight } from 'react-icons/fi';
+import { 
+  FiCamera, FiAlertCircle, FiMapPin, FiCalendar, 
+  FiDollarSign, FiUser, FiHome, FiCreditCard, FiHash, FiActivity, FiClock // 👈 FIXED: FiClock added here
+} from 'react-icons/fi';
 
 const ApplyLoan = () => {
   const user = JSON.parse(localStorage.getItem('user') || '{}');
@@ -10,7 +13,7 @@ const ApplyLoan = () => {
   
   const [formData, setFormData] = useState({ 
     amount: '10000', 
-    type: 'JLG Loan', 
+    type: 'Daily EMI', 
     tenure: '1', 
     accountHolderName: '',
     bankName: '',
@@ -21,25 +24,23 @@ const ApplyLoan = () => {
     passbookPic: ''
   });
 
-  // --- 🔥 UPDATED MARKET MATH (MIN 10K, 2% FEE, 10% INTEREST, DAILY EMI) ---
   const calculateFinances = () => {
     const principal = Number(formData.amount) || 0;
     const months = Number(formData.tenure) || 0;
-    
-    // 1. Processing Fee @ 2%
     const processingFee = principal * 0.02; 
-    const fileCharge = principal > 0 ? 200 : 0; 
-    const netDisbursed = principal - (processingFee + fileCharge);
-
-    // 2. Interest @ 10% Monthly
+    const netDisbursed = principal - processingFee;
     const totalInterest = principal * 0.10 * months;
     const totalPayable = principal + totalInterest;
+    let totalInstallments = formData.type === 'Daily EMI' ? months * 30 : months * 4;
+    const installmentAmount = totalInstallments > 0 ? (totalPayable / totalInstallments) : 0;
+    const lateFinePerEmi = installmentAmount * 0.10;
 
-    // 3. Daily EMI Logic (Assume 30 days per month)
-    const totalDays = months * 30;
-    const dailyEMI = totalDays > 0 ? (totalPayable / totalDays).toFixed(2) : 0;
-
-    return { processingFee, fileCharge, netDisbursed, dailyEMI, totalDays, totalPayable };
+    return { 
+      processingFee, netDisbursed, 
+      installmentAmount: installmentAmount.toFixed(2), 
+      totalInstallments, totalPayable,
+      lateFinePerEmi: lateFinePerEmi.toFixed(2)
+    };
   };
 
   const finance = calculateFinances();
@@ -47,22 +48,18 @@ const ApplyLoan = () => {
   const handleImageChange = (e) => {
     const file = e.target.files[0];
     if (file) {
-      if (file.size > 2000000) return alert("File size too large! Max 2MB.");
       const reader = new FileReader();
-      reader.onloadend = () => {
-        setFormData(prev => ({ ...prev, passbookPic: reader.result }));
-      };
+      reader.onloadend = () => setFormData(prev => ({ ...prev, passbookPic: reader.result }));
       reader.readAsDataURL(file);
     }
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    
-    // Validations
-    if (Number(formData.amount) < 10000) return alert("Minimum loan amount is ₹10,000.");
-    if (formData.accountNumber !== formData.confirmAccountNumber) return alert("Account Numbers do not match!");
-    if (!formData.passbookPic) return alert("Please upload Bank Passbook photo.");
+    if (Number(formData.amount) < 10000) return alert("⚠️ Minimum loan amount must be ₹10,000.");
+    if (formData.accountNumber !== formData.confirmAccountNumber) return alert("❌ Account Numbers do not match!");
+    if (!formData.passbookPic) return alert("📸 Please upload your bank passbook photo.");
+    if (!formData.branchName) return alert("🏦 Please enter your Branch Name.");
     
     setLoading(true);
     const generatedLoanId = "LN-" + Math.floor(100000 + Math.random() * 900000);
@@ -72,144 +69,249 @@ const ApplyLoan = () => {
       loanId: generatedLoanId,
       customerId: user.id || user._id,
       customerName: user.fullName,
-      fieldOfficerId: user.referredBy || user.sponsorId || null, 
       amount: Number(formData.amount),
       tenureMonths: Number(formData.tenure),
-      totalDays: finance.totalDays,
-      
-      // 🔥 FIX: Backend 'weeklyEMI' mang raha hai, par hum 'dailyEMI' bhej rahe hain.
-      // Hum dono bhej dete hain taaki error na aaye.
-      dailyEMI: Number(finance.dailyEMI), 
-      weeklyEMI: Number(finance.dailyEMI), // 👈 Ye line add kardo backend ke liye
-      
+      emiType: formData.type,
+      installmentAmount: Number(finance.installmentAmount),
+      totalInstallments: finance.totalInstallments,
       processingFee: finance.processingFee,
       totalPayable: finance.totalPayable,
       netDisbursed: finance.netDisbursed,
       status: "Verification Pending",
       appliedDate: new Date().toISOString(),
     };
+
     try {
       const res = await API.post('/loans', loanRequest);
       if (res.data.success) {
-        alert(`Success! Loan Ref: ${generatedLoanId}. Wait for Field Verification.`);
+        alert(`🎉 Loan Request Generated: LN-${generatedLoanId}`);
         navigate('/customer/tracking'); 
       }
     } catch (error) {
-      alert(error.response?.data?.error || "Server sync failed!");
+      alert(error.response?.data?.error || "Ledger sync failed!");
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div style={pageContainer}>
-      <div style={formCard}>
-        <div style={headerStyle}>
-          <h2 style={{ margin: 0, fontWeight: 900, color: '#0f172a' }}>💰 Smart Daily Loan</h2>
-          <div style={minLimitBadge}><FiAlertCircle /> Min: ₹10,000</div>
-        </div>
-        
-        <form onSubmit={handleSubmit}>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
-            <div style={inputGroup}>
-                <label style={label}>Apply Amount (₹)</label>
-                <input type="number" style={inputStyle} value={formData.amount} required 
+    <div className="portal-container">
+      <style>{professionalStyles}</style>
+
+      <div className="application-frame">
+        <header className="terminal-header">
+          <div>
+            <h1 className="main-title">Disbursement Application</h1>
+            <p className="sub-title">Initialize your credit facility within Mathura Branch network</p>
+          </div>
+          <div className="security-tag"><FiActivity /> Encrypted Session</div>
+        </header>
+
+        <form onSubmit={handleSubmit} className="terminal-form">
+          <div className="form-section">
+            <h3 className="section-heading">01. Loan Configuration</h3>
+            <div className="input-grid">
+              <div className="field-box">
+                <label className="field-label">Loan Principal (₹)</label>
+                <div className="input-with-icon">
+                  <FiDollarSign className="icon-main" />
+                  <input type="number" className="premium-input" value={formData.amount} required 
                     min="10000" onChange={e => setFormData({...formData, amount: e.target.value})} />
-            </div>
-            <div style={inputGroup}>
-                <label style={label}>Tenure (Months)</label>
-                <select style={inputStyle} value={formData.tenure} onChange={e => setFormData({...formData, tenure: e.target.value})}>
-                    {[1,2,3,4,5,6].map(m => (
-                        <option key={m} value={m}>{m} Month ({m * 30} Days)</option>
-                    ))}
-                </select>
+                </div>
+              </div>
+              <div className="field-box">
+                <label className="field-label">Repayment Structure</label>
+                <div className="input-with-icon">
+                  <FiCalendar className="icon-main" />
+                  <select className="premium-input" value={formData.type} onChange={e => setFormData({...formData, type: e.target.value})}>
+                    <option value="Daily EMI">Daily Recovery</option>
+                    <option value="Weekly EMI">Weekly Recovery</option>
+                  </select>
+                </div>
+              </div>
+              <div className="field-box">
+                <label className="field-label">Facility Tenure (Months)</label>
+                <div className="input-with-icon">
+                  <FiClock className="icon-main" />
+                  <select className="premium-input" value={formData.tenure} onChange={e => setFormData({...formData, tenure: e.target.value})}>
+                    {[1,2,3,4,5,6].map(m => <option key={m} value={m}>{m} Month Term</option>)}
+                  </select>
+                </div>
+              </div>
             </div>
           </div>
 
-          <div style={bankSection}>
-            <h4 style={bankTitle}>🏦 Bank Disbursement Details</h4>
-            <div style={inputGroup}>
-                <label style={label}>Account Holder Name</label>
-                <input style={inputStyle} required value={formData.accountHolderName} onChange={e => setFormData({...formData, accountHolderName: e.target.value})} />
-            </div>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px' }}>
-                <div style={inputGroup}>
-                    <label style={label}>Bank Name</label>
-                    <input style={inputStyle} required value={formData.bankName} onChange={e => setFormData({...formData, bankName: e.target.value})} />
+          <div className="form-section">
+            <h3 className="section-heading">02. Settlement Destination (Bank Account)</h3>
+            <div className="stacked-fields">
+              <div className="field-box">
+                <label className="field-label">Account Holder Name</label>
+                <div className="input-with-icon">
+                  <FiUser className="icon-main" />
+                  <input className="premium-input" placeholder="Legal name as per bank records" required value={formData.accountHolderName} 
+                    onChange={e => setFormData({...formData, accountHolderName: e.target.value})} />
                 </div>
-                <div style={inputGroup}>
-                    <label style={label}>Account Number</label>
-                    <input type="password" style={inputStyle} required value={formData.accountNumber} onChange={e => setFormData({...formData, accountNumber: e.target.value})} />
-                </div>
-            </div>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px' }}>
-                <div style={inputGroup}>
-                    <label style={label}>IFSC Code</label>
-                    <input style={inputStyle} required value={formData.ifscCode} onChange={e => setFormData({...formData, ifscCode: e.target.value.toUpperCase()})} />
-                </div>
-                <div style={inputGroup}>
-                    <label style={label}>Confirm Account No.</label>
-                    <input style={inputStyle} required value={formData.confirmAccountNumber} onChange={e => setFormData({...formData, confirmAccountNumber: e.target.value})} />
-                </div>
-            </div>
+              </div>
 
-            <div style={uploadBox}>
-                <label style={label}><FiCamera /> Upload Passbook/Cheque Photo</label>
-                <input type="file" accept="image/*" onChange={handleImageChange} style={{marginTop: '8px'}} />
-                {formData.passbookPic && <img src={formData.passbookPic} style={previewImg} alt="KYS Doc" />}
+              <div className="input-grid">
+                <div className="field-box">
+                  <label className="field-label">Full Bank Name</label>
+                  <div className="input-with-icon">
+                    <FiHome className="icon-main" />
+                    <input className="premium-input" placeholder="e.g. HDFC Bank Ltd" required value={formData.bankName} 
+                      onChange={e => setFormData({...formData, bankName: e.target.value})} />
+                  </div>
+                </div>
+                <div className="field-box">
+                  <label className="field-label">Branch & Location</label>
+                  <div className="input-with-icon">
+                    <FiMapPin className="icon-main" />
+                    <input className="premium-input" placeholder="e.g. Krishna Nagar, Mathura" required value={formData.branchName} 
+                      onChange={e => setFormData({...formData, branchName: e.target.value})} />
+                  </div>
+                </div>
+              </div>
+
+              <div className="input-grid">
+                <div className="field-box">
+                  <label className="field-label">Bank IFSC Code</label>
+                  <div className="input-with-icon">
+                    <FiHash className="icon-main" />
+                    <input className="premium-input" placeholder="ABCD0123456" required value={formData.ifscCode} 
+                      onChange={e => setFormData({...formData, ifscCode: e.target.value.toUpperCase()})} />
+                  </div>
+                </div>
+                <div className="field-box">
+                  <label className="field-label">Primary Account Number</label>
+                  <div className="input-with-icon">
+                    <FiCreditCard className="icon-main" />
+                    <input type="password" className="premium-input" placeholder="Enter bank account number" required value={formData.accountNumber} 
+                      onChange={e => setFormData({...formData, accountNumber: e.target.value})} />
+                  </div>
+                </div>
+              </div>
+
+              <div className="field-box">
+                <label className="field-label">Re-Confirm Account Number</label>
+                <input className="premium-input plain" placeholder="Verify your account number" required value={formData.confirmAccountNumber} 
+                  onChange={e => setFormData({...formData, confirmAccountNumber: e.target.value})} />
+              </div>
             </div>
           </div>
 
-          {/* Real-time Math Summary */}
-          <div style={financeGrid}>
-              <div style={finItem}><span>Processing Fee (2%)</span><b>₹{finance.processingFee}</b></div>
-              <div style={finItem}><span>Total Interest (10%/mo)</span><b>₹{finance.totalPayable - Number(formData.amount)}</b></div>
-              <div style={finItem}><span>Net in A/C</span><b style={{color: '#10b981'}}>₹{finance.netDisbursed}</b></div>
+          <div className="form-section">
+            <h3 className="section-heading">03. Digital Evidence (KYC)</h3>
+            <div className="evidence-vault">
+              <label className="upload-trigger">
+                <FiCamera size={24} />
+                <span>Capture Bank Passbook or Cancelled Cheque</span>
+                <input type="file" accept="image/*" onChange={handleImageChange} hidden />
+              </label>
+              {formData.passbookPic && (
+                <div className="preview-container">
+                  <img src={formData.passbookPic} className="image-preview" alt="Document Preview" />
+                  <div className="success-badge">Document Uploaded</div>
+                </div>
+              )}
+            </div>
           </div>
 
-          <div style={emiPreview}>
-            <span style={{ fontSize: '10px', fontWeight: '900', color: '#6366f1' }}>DAILY COLLECTION RECOVERY</span>
-            <h3 style={{ margin: '5px 0', fontSize: '32px', fontWeight: '950', color: '#0f172a' }}>₹{finance.dailyEMI} <small style={{fontSize: '14px', color: '#94a3b8'}}>/ day</small></h3>
-          </div>
-
-          <button type="submit" disabled={loading} style={btnStyle}>
-            {loading ? "Registering in Ledger..." : "Apply & Submit Report"}
+          <button type="submit" disabled={loading} className="master-submit-btn">
+            {loading ? "Authenticating Request..." : "Finalize Application & Submit"}
           </button>
         </form>
       </div>
 
-      <div style={infoPanel}>
-        <h4 style={{ margin: '0 0 15px 0', fontWeight: '900' }}>📌 PRODUCT SOP</h4>
-        <div style={sopCard}>
-           <p>• <b>Recovery:</b> Doorstep daily collection.</p>
-           <p>• <b>Interest:</b> Flat 10% monthly.</p>
-           <p>• <b>Verification:</b> Physical LUC within 24hrs.</p>
+      <aside className="financial-terminal">
+        <div className="terminal-sticky">
+          <div className="emi-insight-card">
+            <header>
+              <span className="type-label">{formData.type.toUpperCase()}</span>
+              <FiActivity color="#10b981" />
+            </header>
+            <div className="amount-display">
+              <h2 className="curr-amount">₹{finance.installmentAmount}</h2>
+              <span className="curr-cycle">/ per {formData.type === 'Daily EMI' ? 'day' : 'week'}</span>
+            </div>
+            <footer className="late-info">
+              <FiAlertCircle /> Late Penalty: ₹{finance.lateFinePerEmi}
+            </footer>
+          </div>
+
+          <div className="ledger-summary">
+            <h4 className="ledger-title">Facility Ledger</h4>
+            <div className="ledger-row highlight">
+              <span>Disbursement (Net)</span>
+              <span>₹{finance.netDisbursed}</span>
+            </div>
+            <div className="ledger-row">
+              <span>Principal Amount</span>
+              <span>₹{Number(formData.amount).toLocaleString()}</span>
+            </div>
+            <div className="ledger-row">
+              <span>Interest (10% Flat)</span>
+              <span>₹{(finance.totalPayable - Number(formData.amount)).toFixed(0)}</span>
+            </div>
+            <div className="ledger-row">
+              <span>Service Fee (2%)</span>
+              <span>₹{finance.processingFee}</span>
+            </div>
+            <div className="ledger-row total">
+              <span>Total Payable</span>
+              <span>₹{finance.totalPayable.toFixed(0)}</span>
+            </div>
+          </div>
         </div>
-        <div style={{marginTop: '20px', fontSize: '11px', color: '#ef4444', fontWeight: 'bold'}}>
-            ⚠️ Note: Ensure account number is correct. Funds once disbursed cannot be reversed.
-        </div>
-      </div>
+      </aside>
     </div>
   );
 };
 
-// --- Modern UI Styles ---
-const pageContainer = { display: 'flex', gap: '20px', padding: '25px', maxWidth: '1200px', margin: '0 auto', background: '#f4f7fe', minHeight: '100vh' };
-const formCard = { flex: '2', background: '#fff', padding: '35px', borderRadius: '30px', boxShadow: '0 10px 25px rgba(0,0,0,0.02)', border: '1px solid #e2e8f0' };
-const headerStyle = { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '25px' };
-const minLimitBadge = { background: '#fef2f2', color: '#ef4444', padding: '6px 12px', borderRadius: '8px', fontSize: '10px', fontWeight: '900', display: 'flex', alignItems: 'center', gap: '5px' };
-const inputGroup = { marginBottom: '18px' };
-const label = { display: 'block', fontSize: '10px', fontWeight: '900', color: '#64748b', marginBottom: '6px', textTransform: 'uppercase' };
-const inputStyle = { width: '100%', padding: '14px', borderRadius: '12px', border: '1.5px solid #f1f5f9', outline: 'none', background: '#f8fafc', fontWeight: '700', boxSizing: 'border-box' };
-const bankSection = { padding: '20px', background: '#f8fafc', borderRadius: '24px', border: '1px solid #f1f5f9', marginBottom: '20px' };
-const bankTitle = { margin: '0 0 15px 0', fontSize: '14px', fontWeight: '900' };
-const uploadBox = { marginTop: '15px', padding: '20px', border: '2px dashed #cbd5e1', borderRadius: '15px', textAlign: 'center' };
-const previewImg = { width: '100%', maxHeight: '180px', objectFit: 'contain', marginTop: '15px', borderRadius: '10px', boxShadow: '0 5px 15px rgba(0,0,0,0.1)' };
-const financeGrid = { display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '10px', marginBottom: '20px' };
-const finItem = { background: '#fff', padding: '15px', borderRadius: '15px', border: '1px solid #f1f5f9', textAlign: 'center' };
-const emiPreview = { background: '#e0e7ff', padding: '25px', borderRadius: '25px', textAlign: 'center', marginBottom: '20px' };
-const btnStyle = { width: '100%', padding: '20px', background: '#0f172a', color: '#fff', border: 'none', borderRadius: '18px', fontWeight: '900', cursor: 'pointer', fontSize: '16px' };
-const infoPanel = { flex: '1', background: '#fff', padding: '30px', borderRadius: '30px', height: 'fit-content', border: '1px solid #e2e8f0' };
-const sopCard = { background: '#f8fafc', padding: '20px', borderRadius: '20px', fontSize: '13px', color: '#475569', lineHeight: '2' };
+const professionalStyles = `
+  .portal-container { display: flex; gap: 40px; padding: 40px; max-width: 1440px; margin: 0 auto; background: #f8fafc; min-height: 100vh; font-family: 'Plus Jakarta Sans', sans-serif; }
+  .application-frame { flex: 1; background: #fff; border-radius: 40px; box-shadow: 0 10px 40px rgba(0,0,0,0.03); border: 1px solid #eef2f6; overflow: hidden; }
+  .terminal-header { background: #0f172a; padding: 40px; color: #fff; display: flex; justify-content: space-between; align-items: center; }
+  .main-title { margin: 0; font-size: 28px; font-weight: 900; letter-spacing: -1px; }
+  .sub-title { margin: 5px 0 0 0; color: #94a3b8; font-size: 14px; }
+  .security-tag { background: rgba(16, 185, 129, 0.1); color: #10b981; padding: 8px 16px; border-radius: 100px; font-size: 11px; font-weight: 800; display: flex; align-items: center; gap: 8px; text-transform: uppercase; }
+  .terminal-form { padding: 40px; }
+  .form-section { margin-bottom: 40px; }
+  .section-heading { font-size: 13px; font-weight: 900; color: #6366f1; text-transform: uppercase; letter-spacing: 2px; border-bottom: 1.5px solid #f1f5f9; padding-bottom: 15px; margin-bottom: 25px; }
+  .input-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px; }
+  .field-box { display: flex; flex-direction: column; gap: 8px; margin-bottom: 20px; }
+  .field-label { font-size: 11px; font-weight: 800; color: #64748b; text-transform: uppercase; letter-spacing: 0.5px; }
+  .input-with-icon { position: relative; display: flex; align-items: center; }
+  .icon-main { position: absolute; left: 16px; color: #cbd5e1; font-size: 20px; }
+  .premium-input { width: 100%; padding: 16px 16px 16px 52px; border-radius: 16px; border: 2px solid #f1f5f9; outline: none; background: #fff; font-weight: 800; font-size: 15px; transition: 0.3s; box-sizing: border-box; color: #0f172a; }
+  .premium-input.plain { padding: 16px; }
+  .premium-input:focus { border-color: #6366f1; box-shadow: 0 0 0 5px rgba(99, 102, 241, 0.05); }
+  .evidence-vault { border: 2px dashed #e2e8f0; border-radius: 24px; padding: 40px; text-align: center; background: #fafafa; }
+  .upload-trigger { cursor: pointer; display: flex; flex-direction: column; align-items: center; gap: 10px; color: #64748b; font-weight: 700; }
+  .preview-container { margin-top: 25px; }
+  .image-preview { width: 100%; max-height: 300px; object-fit: contain; border-radius: 20px; }
+  .success-badge { background: #10b981; color: #fff; padding: 6px 12px; border-radius: 8px; font-size: 10px; font-weight: 900; display: inline-block; margin-top: 15px; }
+  .master-submit-btn { width: 100%; padding: 24px; background: #0f172a; color: #fff; border: none; border-radius: 20px; font-weight: 900; cursor: pointer; font-size: 16px; transition: 0.4s; }
+  .master-submit-btn:hover { background: #6366f1; transform: translateY(-3px); }
+  .financial-terminal { flex: 0 0 380px; }
+  .terminal-sticky { position: sticky; top: 120px; }
+  .emi-insight-card { background: #0f172a; color: #fff; padding: 35px; border-radius: 35px; margin-bottom: 25px; }
+  .emi-insight-card header { display: flex; justify-content: space-between; margin-bottom: 20px; }
+  .type-label { font-size: 10px; font-weight: 950; letter-spacing: 2px; color: #6366f1; }
+  .curr-amount { margin: 0; font-size: 48px; font-weight: 950; letter-spacing: -2px; }
+  .curr-cycle { font-size: 14px; color: #94a3b8; font-weight: 700; }
+  .late-info { display: flex; align-items: center; gap: 8px; font-size: 12px; color: #fb7185; font-weight: 800; border-top: 1px solid rgba(255,255,255,0.1); padding-top: 15px; margin-top: 20px; }
+  .ledger-summary { background: #fff; border-radius: 30px; padding: 30px; border: 1px solid #eef2f6; }
+  .ledger-title { margin: 0 0 20px 0; font-size: 14px; font-weight: 900; color: #0f172a; text-transform: uppercase; }
+  .ledger-row { display: flex; justify-content: space-between; padding: 12px 0; border-bottom: 1px solid #f8fafc; font-size: 13px; font-weight: 700; color: #64748b; }
+  .ledger-row.highlight { color: #10b981; }
+  .ledger-row span:last-child { color: #0f172a; font-weight: 900; }
+  .ledger-row.total { border-top: 2px solid #f1f5f9; border-bottom: none; margin-top: 10px; font-size: 16px; color: #0f172a; }
+
+  @media (max-width: 1100px) {
+    .portal-container { flex-direction: column; padding: 20px; }
+    .financial-terminal { flex: none; width: 100%; }
+    .terminal-header { flex-direction: column; gap: 20px; text-align: center; }
+  }
+`;
 
 export default ApplyLoan;

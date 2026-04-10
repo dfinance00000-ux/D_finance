@@ -1,25 +1,42 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import API from '../../api/axios';
+import { 
+  FiCamera, FiUpload, FiX, FiCheckCircle, FiUser, 
+  FiHome, FiShield, FiBriefcase, FiCreditCard 
+} from 'react-icons/fi';
 
 const AdvisorVerification = () => {
   const [myPendingLoans, setMyPendingLoans] = useState([]);
   const [loading, setLoading] = useState(true);
   const [selectedLoan, setSelectedLoan] = useState(null);
   
-  // --- Updated Form State with Nominee & Images ---
+  // --- Sabse Detailed Form State (Max Info) ---
   const [fieldForm, setFieldForm] = useState({
+    // 1. Religion & Social
     religion: 'HINDU', category: 'GENERAL', education: 'GRADUATE',
+    
+    // 2. Residence & Area
     residenceNature: 'Own', houseType: 'CONCRETE', areaType: 'RURAL',
-    vehicle: 'Yes', vehicleType: 'CAR', familyIncomeActivity: 'Paddy',
+    
+    // 3. Economy
+    vehicle: 'Yes', vehicleType: 'TWO WHEELER', familyIncomeActivity: 'Business',
     monthlyIncome: '', expenditure: '', financialInclusion: [],
     
-    // Nominee Info
-    nomineeName: '', nomineeDOB: '', nomineeGender: 'MALE',
-    nomineeMobile: '', nomineeRelation: 'SPOUSE', nomineeAddress: '',
-    
-    // Document Base64 States
-    nomineePic: '', aadhaarFront: '', aadhaarBack: '',
-    secondaryIdFront: '', secondaryIdBack: ''
+    // 4. Detailed Nominee Info (As requested)
+    nomineeName: '', 
+    nomineeDOB: '', 
+    nomineeGender: 'MALE',
+    nomineeMobile: '', 
+    nomineeRelation: 'SPOUSE', 
+    nomineeAddress: '',
+    nomineeCategory: 'GENERAL',
+
+    // 5. Digital Documents (Front & Back)
+    nomineePic: '', 
+    aadhaarFront: '', 
+    aadhaarBack: '',
+    secondaryIdFront: '', 
+    secondaryIdBack: '' 
   });
 
   const currentAdvisor = JSON.parse(localStorage.getItem('user')) || {};
@@ -37,12 +54,10 @@ const AdvisorVerification = () => {
     }
   }, [currentAdvisor.id, currentAdvisor._id]);
 
-  useEffect(() => {
-    fetchMyRequests();
-  }, [fetchMyRequests]);
+  useEffect(() => { fetchMyRequests(); }, [fetchMyRequests]);
 
-  // --- Image to Base64 Handler ---
-  const handleImageChange = (e, field) => {
+  // --- Image Handler (Camera/Gallery) ---
+  const handleImageInput = (e, field) => {
     const file = e.target.files[0];
     if (file) {
       const reader = new FileReader();
@@ -53,18 +68,11 @@ const AdvisorVerification = () => {
     }
   };
 
-  const handleCheckbox = (item) => {
-    const updated = fieldForm.financialInclusion.includes(item)
-      ? fieldForm.financialInclusion.filter(i => i !== item)
-      : [...fieldForm.financialInclusion, item];
-    setFieldForm({ ...fieldForm, financialInclusion: updated });
-  };
-
   const handleSOPSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
 
-    const inspectionData = {
+    const finalPayload = {
       ...fieldForm,
       status: "Field Verified",
       inspectionDate: new Date().toISOString(),
@@ -73,40 +81,36 @@ const AdvisorVerification = () => {
     };
 
     try {
-      await API.patch(`/loans/${selectedLoan._id || selectedLoan.id}`, inspectionData);
-      alert("✅ LUC Report & Documents Submitted!");
+      await API.patch(`/loans/${selectedLoan._id || selectedLoan.id}`, finalPayload);
+      alert("🚀 LUC Intelligence Report Submitted Successfully!");
       setSelectedLoan(null);
       fetchMyRequests();
     } catch (err) {
-      alert("❌ Submission failed. Check your connection.");
-    } finally {
-      setLoading(false);
-    }
+      alert("❌ Submission Failed. Check server logs.");
+    } finally { setLoading(false); }
   };
 
   return (
-    <div style={{ padding: '20px' }}>
+    <div style={containerStyle}>
+      <style>{responsiveCSS}</style>
+      
       <div style={headerSection}>
-        <h2 style={{ color: '#0f172a', margin: 0, fontWeight: '900' }}>🏠 MY FIELD ASSIGNMENTS (LUC)</h2>
-        <p style={{ color: '#64748b', fontSize: '13px' }}>Advisor: <b>{currentAdvisor?.fullName}</b></p>
+        <h2 style={mainTitle}>🏠 FIELD AUDIT & LUC TERMINAL</h2>
+        <p style={subTitle}>Authorized Officer: <b>{currentAdvisor?.fullName}</b></p>
       </div>
       
       {loading && !selectedLoan ? (
-        <p style={statusMsg}>🔄 Syncing assignments from Cloud...</p>
+        <div style={statusMsg}>🔄 Accessing Secure Nodes...</div>
       ) : myPendingLoans.length === 0 ? (
-        <div style={emptyState}>
-          <p>No Pending Visits Found</p>
-          <small>Assignments appear when customers apply under your ID.</small>
-        </div>
+        <div style={emptyState}>No Pending Field Assignments.</div>
       ) : (
-        <div style={gridContainer}>
+        <div className="card-grid" style={gridContainer}>
           {myPendingLoans.map(loan => (
-            <div key={loan._id || loan.id} style={verifyCard}>
+            <div key={loan._id} style={verifyCard}>
               <div style={cardBadge}>LUC PENDING</div>
-              <h4 style={{margin: '10px 0 5px 0', color: '#1e293b'}}>{loan.customerName}</h4>
-              <p style={{color: '#059669', fontWeight: '900', fontSize: '20px'}}>₹{loan.amount}</p>
-              <p style={{fontSize: '11px', color: '#94a3b8', fontWeight: '700'}}>LOAN ID: {loan.loanId}</p>
-              <button onClick={() => setSelectedLoan(loan)} style={verifyBtn}>Start Field Audit</button>
+              <h4 style={custName}>{loan.customerName}</h4>
+              <p style={loanAmt}>₹{loan.amount.toLocaleString()}</p>
+              <button onClick={() => setSelectedLoan(loan)} style={verifyBtn}>Start Field Inspection</button>
             </div>
           ))}
         </div>
@@ -116,97 +120,90 @@ const AdvisorVerification = () => {
         <div style={modalOverlay}>
           <div style={modalContent}>
             <div style={modalHeader}>
-              <h3 style={{ margin: 0, fontSize: '18px' }}>LUC Audit: {selectedLoan.customerName}</h3>
-              <button onClick={() => setSelectedLoan(null)} style={closeBtn}>✕</button>
+              <h3 style={{ margin: 0, fontSize: '16px' }}>LUC: {selectedLoan.customerName}</h3>
+              <FiX onClick={() => setSelectedLoan(null)} style={{cursor:'pointer'}} />
             </div>
             
             <form onSubmit={handleSOPSubmit} style={formScroll}>
-              {/* --- Nominee Information --- */}
-              <h4 style={sectionTitle}>👤 Nominee Details</h4>
-              <div style={formGrid}>
-                <section>
-                  <label style={labelStyle}>NOMINEE NAME</label>
-                  <input required style={inputStyle} value={fieldForm.nomineeName} onChange={e => setFieldForm({...fieldForm, nomineeName: e.target.value})} />
-                  
-                  <label style={labelStyle}>NOMINEE DOB</label>
-                  <input type="date" style={inputStyle} value={fieldForm.nomineeDOB} onChange={e => setFieldForm({...fieldForm, nomineeDOB: e.target.value})} />
-                  
-                  <label style={labelStyle}>GENDER</label>
-                  <select style={inputStyle} value={fieldForm.nomineeGender} onChange={e => setFieldForm({...fieldForm, nomineeGender: e.target.value})}>
-                    <option>MALE</option><option>FEMALE</option><option>OTHER</option>
-                  </select>
-                </section>
-                <section>
-                  <label style={labelStyle}>RELATIONSHIP</label>
-                  <select style={inputStyle} value={fieldForm.nomineeRelation} onChange={e => setFieldForm({...fieldForm, nomineeRelation: e.target.value})}>
-                    <option>SPOUSE</option><option>FATHER</option><option>MOTHER</option><option>SON</option><option>DAUGHTER</option><option>BROTHER</option>
-                  </select>
-
-                  <label style={labelStyle}>MOBILE NUMBER</label>
-                  <input type="number" style={inputStyle} value={fieldForm.nomineeMobile} onChange={e => setFieldForm({...fieldForm, nomineeMobile: e.target.value})} />
-                  
-                  <label style={labelStyle}>NOMINEE ADDRESS</label>
+              
+              {/* --- SECTION: NOMINEE --- */}
+              <h4 style={sectionTitle}><FiUser /> Nominee Comprehensive Details</h4>
+              <div className="resp-grid" style={formGrid}>
+                <div style={inputGroup}>
+                   <label style={labelStyle}>Nominee Full Name</label>
+                   <input required style={inputStyle} value={fieldForm.nomineeName} onChange={e => setFieldForm({...fieldForm, nomineeName: e.target.value})} />
+                </div>
+                <div style={inputGroup}>
+                   <label style={labelStyle}>Date of Birth</label>
+                   <input type="date" required style={inputStyle} value={fieldForm.nomineeDOB} onChange={e => setFieldForm({...fieldForm, nomineeDOB: e.target.value})} />
+                </div>
+                <div style={inputGroup}>
+                   <label style={labelStyle}>Gender</label>
+                   <select style={inputStyle} value={fieldForm.nomineeGender} onChange={e => setFieldForm({...fieldForm, nomineeGender: e.target.value})}>
+                      <option>MALE</option><option>FEMALE</option><option>OTHER</option>
+                   </select>
+                </div>
+                <div style={inputGroup}>
+                   <label style={labelStyle}>Nominee Category</label>
+                   <select style={inputStyle} value={fieldForm.nomineeCategory} onChange={e => setFieldForm({...fieldForm, nomineeCategory: e.target.value})}>
+                      <option>GENERAL</option><option>OBC</option><option>SC</option><option>ST</option>
+                   </select>
+                </div>
+                <div style={inputGroup}>
+                   <label style={labelStyle}>Relationship</label>
+                   <select style={inputStyle} value={fieldForm.nomineeRelation} onChange={e => setFieldForm({...fieldForm, nomineeRelation: e.target.value})}>
+                      <option>SPOUSE</option><option>FATHER</option><option>MOTHER</option><option>SON</option><option>DAUGHTER</option><option>BROTHER</option>
+                   </select>
+                </div>
+                <div style={inputGroup}>
+                   <label style={labelStyle}>Mobile Number</label>
+                   <input type="number" required style={inputStyle} value={fieldForm.nomineeMobile} onChange={e => setFieldForm({...fieldForm, nomineeMobile: e.target.value})} />
+                </div>
+              </div>
+              <div style={inputGroup}>
+                  <label style={labelStyle}>Permanent Address</label>
                   <input style={inputStyle} value={fieldForm.nomineeAddress} onChange={e => setFieldForm({...fieldForm, nomineeAddress: e.target.value})} />
-                </section>
               </div>
 
-              {/* --- Document Uploads --- */}
-              <h4 style={sectionTitle}>📸 Document Capture</h4>
-              <div style={imageGrid}>
-                <div style={uploadBox}>
-                  <label style={labelStyle}>NOMINEE PHOTO</label>
-                  <input type="file" accept="image/*" onChange={(e) => handleImageChange(e, 'nomineePic')} />
-                  {fieldForm.nomineePic && <img src={fieldForm.nomineePic} style={previewImg} />}
+              {/* --- SECTION: DOCUMENTS --- */}
+              <h4 style={sectionTitle}><FiCreditCard /> Digital Evidence Capture (Front & Back)</h4>
+              <div className="doc-resp-grid" style={docGrid}>
+                <CaptureBox label="Nominee Live Photo" field="nomineePic" value={fieldForm.nomineePic} onInput={handleImageInput} />
+                <CaptureBox label="Aadhaar Front" field="aadhaarFront" value={fieldForm.aadhaarFront} onInput={handleImageInput} />
+                <CaptureBox label="Aadhaar Back" field="aadhaarBack" value={fieldForm.aadhaarBack} onInput={handleImageInput} />
+                <CaptureBox label="Voter/PAN Front" field="secondaryIdFront" value={fieldForm.secondaryIdFront} onInput={handleImageInput} />
+                <CaptureBox label="Voter/PAN Back" field="secondaryIdBack" value={fieldForm.secondaryIdBack} onInput={handleImageInput} />
+              </div>
+
+              {/* --- SECTION: SOCIO-ECONOMIC --- */}
+              <h4 style={sectionTitle}><FiBriefcase /> Socio-Economic Survey</h4>
+              <div className="resp-grid" style={formGrid}>
+                <div style={inputGroup}>
+                   <label style={labelStyle}>House Type</label>
+                   <select style={inputStyle} value={fieldForm.houseType} onChange={e => setFieldForm({...fieldForm, houseType: e.target.value})}>
+                      <option>CONCRETE</option><option>KUTCHA</option><option>TILED</option><option>HUT</option>
+                   </select>
                 </div>
-                <div style={uploadBox}>
-                  <label style={labelStyle}>AADHAAR FRONT</label>
-                  <input type="file" accept="image/*" onChange={(e) => handleImageChange(e, 'aadhaarFront')} />
-                  {fieldForm.aadhaarFront && <img src={fieldForm.aadhaarFront} style={previewImg} />}
+                <div style={inputGroup}>
+                   <label style={labelStyle}>Area Nature</label>
+                   <select style={inputStyle} value={fieldForm.areaType} onChange={e => setFieldForm({...fieldForm, areaType: e.target.value})}>
+                      <option>RURAL</option><option>URBAN</option><option>SEMI-URBAN</option>
+                   </select>
                 </div>
-                <div style={uploadBox}>
-                  <label style={labelStyle}>AADHAAR BACK</label>
-                  <input type="file" accept="image/*" onChange={(e) => handleImageChange(e, 'aadhaarBack')} />
-                  {fieldForm.aadhaarBack && <img src={fieldForm.aadhaarBack} style={previewImg} />}
+                <div style={inputGroup}>
+                   <label style={labelStyle}>Verified Monthly Income</label>
+                   <input type="number" required style={inputStyle} placeholder="₹" value={fieldForm.monthlyIncome} onChange={e => setFieldForm({...fieldForm, monthlyIncome: e.target.value})} />
                 </div>
-                <div style={uploadBox}>
-                  <label style={labelStyle}>SECONDARY ID FRONT</label>
-                  <input type="file" accept="image/*" onChange={(e) => handleImageChange(e, 'secondaryIdFront')} />
-                  {fieldForm.secondaryIdFront && <img src={fieldForm.secondaryIdFront} style={previewImg} />}
-                </div>
-                <div style={uploadBox}>
-                  <label style={labelStyle}>SECONDARY ID BACK</label>
-                  <input type="file" accept="image/*" onChange={(e) => handleImageChange(e, 'secondaryIdBack')} />
-                  {fieldForm.secondaryIdBack && <img src={fieldForm.secondaryIdBack} style={previewImg} />}
+                <div style={inputGroup}>
+                   <label style={labelStyle}>Income Activity</label>
+                   <input style={inputStyle} placeholder="e.g. Shop, Farming" value={fieldForm.familyIncomeActivity} onChange={e => setFieldForm({...fieldForm, familyIncomeActivity: e.target.value})} />
                 </div>
               </div>
 
-              {/* --- Original Field Observation Section --- */}
-              <h4 style={sectionTitle}>🏠 House & Income Observation</h4>
-              <div style={formGrid}>
-                <section>
-                  <label style={labelStyle}>RELIGION</label>
-                  <select style={inputStyle} value={fieldForm.religion} onChange={e => setFieldForm({...fieldForm, religion: e.target.value})}>
-                    <option>HINDU</option><option>MUSLIM</option><option>CHRISTIAN</option><option>OTHERS</option>
-                  </select>
-                  <label style={labelStyle}>HOUSE TYPE</label>
-                  <select style={inputStyle} value={fieldForm.houseType} onChange={e => setFieldForm({...fieldForm, houseType: e.target.value})}>
-                    <option>CONCRETE</option><option>KUTCHA</option><option>TILED</option>
-                  </select>
-                </section>
-                <section>
-                  <label style={labelStyle}>CATEGORY</label>
-                  <select style={inputStyle} value={fieldForm.category} onChange={e => setFieldForm({...fieldForm, category: e.target.value})}>
-                    <option>GENERAL</option><option>OBC</option><option>SC</option><option>ST</option>
-                  </select>
-                  <label style={labelStyle}>MONTHLY INCOME</label>
-                  <input type="number" style={inputStyle} placeholder="₹ 0.00" value={fieldForm.monthlyIncome} onChange={e => setFieldForm({...fieldForm, monthlyIncome: e.target.value})} />
-                </section>
-              </div>
-
-              <div style={{ display: 'flex', gap: '15px', marginTop: '30px' }}>
-                <button type="button" onClick={() => setSelectedLoan(null)} style={cancelBtn}>CANCEL</button>
-                <button type="submit" disabled={loading} style={loading ? {...submitBtn, opacity: 0.7} : submitBtn}>
-                  {loading ? 'Submitting...' : 'COMPLETE AUDIT'}
+              <div style={footerAction}>
+                <button type="button" onClick={() => setSelectedLoan(null)} style={cancelBtn}>DISCARD</button>
+                <button type="submit" disabled={loading} style={submitBtn}>
+                  {loading ? 'SYNCING DATA...' : 'COMPLETE VERIFICATION'}
                 </button>
               </div>
             </form>
@@ -217,29 +214,78 @@ const AdvisorVerification = () => {
   );
 };
 
-// --- Updated Styles (Including new ones) ---
-const sectionTitle = { fontSize: '12px', fontWeight: '900', color: '#2563eb', borderLeft: '4px solid #2563eb', paddingLeft: '10px', margin: '25px 0 15px 0', textTransform: 'uppercase' };
-const imageGrid = { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px', marginBottom: '20px' };
-const uploadBox = { background: '#f8fafc', padding: '10px', borderRadius: '10px', border: '1px solid #e2e8f0' };
-const previewImg = { width: '100%', height: '100px', objectFit: 'cover', borderRadius: '8px', marginTop: '10px' };
+// --- Helper Component for Camera + Gallery ---
+const CaptureBox = ({ label, field, value, onInput }) => {
+  const galRef = useRef(null);
+  const camRef = useRef(null);
 
-// --- Same Styles as Original ---
-const headerSection = { marginBottom: '30px', borderBottom: '2.5px solid #f1f5f9', paddingBottom: '15px' };
-const modalOverlay = { position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(15, 23, 42, 0.9)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, backdropFilter: 'blur(8px)' };
-const modalContent = { background: '#fff', borderRadius: '32px', width: '95%', maxWidth: '700px', overflow: 'hidden', boxShadow: '0 25px 50px -12px rgba(0,0,0,0.5)' };
-const modalHeader = { background: '#0f172a', color: '#fff', padding: '25px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' };
-const closeBtn = { background: 'rgba(255,255,255,0.1)', border: 'none', color: '#fff', width: '35px', height: '35px', borderRadius: '50%', cursor: 'pointer' };
-const formScroll = { padding: '25px', overflowY: 'auto', maxHeight: '75vh' };
-const formGrid = { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' };
-const inputStyle = { width: '100%', padding: '14px', margin: '5px 0 15px 0', borderRadius: '12px', border: '1.5px solid #e2e8f0', fontSize: '14px', outline: 'none', background: '#f8fafc' };
-const labelStyle = { fontSize: '10px', fontWeight: '900', color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.5px' };
-const submitBtn = { flex: 2, padding: '18px', background: '#059669', color: '#fff', border: 'none', borderRadius: '16px', fontWeight: '900', cursor: 'pointer', fontSize: '14px' };
-const cancelBtn = { flex: 1, padding: '18px', background: '#f1f5f9', color: '#64748b', border: 'none', borderRadius: '16px', fontWeight: '900', cursor: 'pointer' };
-const gridContainer = { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '25px' };
-const verifyCard = { background: '#fff', padding: '30px', borderRadius: '28px', border: '1px solid #f1f5f9', boxShadow: '0 10px 15px -3px rgba(0,0,0,0.02)' };
-const cardBadge = { display: 'inline-block', background: '#fef3c7', padding: '5px 12px', borderRadius: '8px', fontSize: '9px', fontWeight: '900', color: '#92400e' };
-const verifyBtn = { width: '100%', marginTop: '20px', padding: '15px', background: '#0f172a', color: '#fff', border: 'none', borderRadius: '14px', fontWeight: '900', cursor: 'pointer' };
-const emptyState = { textAlign: 'center', padding: '80px 20px', color: '#94a3b8', background: '#fff', borderRadius: '30px', border: '2px dashed #e2e8f0' };
-const statusMsg = { textAlign: 'center', color: '#64748b', padding: '20px', fontWeight: 'bold' };
+  return (
+    <div style={upBox}>
+      <label style={miniLabel}>{label}</label>
+      <div style={btnRow}>
+        <button type="button" onClick={() => galRef.current.click()} style={smBtn}>Gallery</button>
+        <button type="button" onClick={() => camRef.current.click()} style={smBtnPrimary}>Camera</button>
+      </div>
+
+      <input type="file" ref={galRef} hidden accept="image/*" onChange={(e) => onInput(e, field)} />
+      <input type="file" ref={camRef} hidden accept="image/*" capture="environment" onChange={(e) => onInput(e, field)} />
+
+      {value && (
+        <div style={prevContainer}>
+          <img src={value} style={imgPrev} alt="preview" />
+          <div style={doneBadge}><FiCheckCircle /> Captured</div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+// --- Styles ---
+const containerStyle = { padding: '20px', minHeight: '100vh', background: '#f8fafc', fontFamily: 'sans-serif' };
+const headerSection = { marginBottom: '25px', borderBottom: '2.5px solid #e2e8f0', paddingBottom: '15px' };
+const mainTitle = { color: '#0f172a', margin: 0, fontWeight: '900', fontSize: '20px' };
+const subTitle = { color: '#64748b', fontSize: '12px', marginTop: '5px' };
+
+const gridContainer = { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '20px' };
+const verifyCard = { background: '#fff', padding: '25px', borderRadius: '25px', border: '1px solid #e2e8f0', boxShadow: '0 4px 6px rgba(0,0,0,0.02)' };
+const cardBadge = { background: '#fef3c7', padding: '4px 10px', borderRadius: '8px', fontSize: '9px', fontWeight: '950', color: '#92400e', display: 'inline-block' };
+const custName = { margin: '15px 0 5px 0', fontSize: '18px', fontWeight: '800', color: '#1e293b' };
+const loanAmt = { fontSize: '24px', fontWeight: '900', color: '#059669', marginBottom: '15px' };
+const verifyBtn = { width: '100%', padding: '14px', background: '#0f172a', color: '#fff', border: 'none', borderRadius: '12px', fontWeight: '900', cursor: 'pointer' };
+
+const modalOverlay = { position: 'fixed', inset: 0, background: 'rgba(15, 23, 42, 0.95)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, backdropFilter: 'blur(10px)', padding: '10px' };
+const modalContent = { background: '#fff', borderRadius: '30px', width: '100%', maxWidth: '700px', maxHeight: '92vh', overflow: 'hidden' };
+const modalHeader = { background: '#0f172a', color: '#fff', padding: '20px 25px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' };
+const formScroll = { padding: '20px 25px', overflowY: 'auto', maxHeight: '78vh' };
+const sectionTitle = { fontSize: '11px', fontWeight: '900', color: '#2563eb', margin: '25px 0 15px 0', display: 'flex', alignItems: 'center', gap: '8px', textTransform: 'uppercase', borderLeft: '4px solid #2563eb', paddingLeft: '10px' };
+
+const formGrid = { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px' };
+const inputGroup = { display: 'flex', flexDirection: 'column', gap: '5px' };
+const labelStyle = { fontSize: '9px', fontWeight: '900', color: '#64748b', textTransform: 'uppercase' };
+const inputStyle = { padding: '12px', borderRadius: '10px', border: '1.5px solid #e2e8f0', background: '#f8fafc', fontSize: '14px', fontWeight: '600', outline: 'none' };
+
+const docGrid = { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '15px' };
+const upBox = { background: '#f1f5f9', padding: '12px', borderRadius: '20px', border: '1px solid #e2e8f0' };
+const miniLabel = { fontSize: '9px', fontWeight: '900', color: '#475569', marginBottom: '8px', display: 'block' };
+const btnRow = { display: 'flex', gap: '5px', marginBottom: '10px' };
+const smBtn = { flex: 1, padding: '8px', borderRadius: '8px', border: '1px solid #cbd5e1', background: '#fff', fontSize: '10px', fontWeight: '800', cursor: 'pointer' };
+const smBtnPrimary = { ...smBtn, background: '#0f172a', color: '#fff', border: 'none' };
+const prevContainer = { position: 'relative' };
+const imgPrev = { width: '100%', height: '120px', objectFit: 'cover', borderRadius: '10px', border: '2px solid #fff' };
+const doneBadge = { position: 'absolute', bottom: '5px', right: '5px', background: '#059669', color: '#fff', fontSize: '8px', padding: '3px 8px', borderRadius: '8px', fontWeight: '900', display: 'flex', alignItems: 'center', gap: '3px' };
+
+const footerAction = { display: 'flex', gap: '10px', marginTop: '30px', paddingBottom: '20px' };
+const submitBtn = { flex: 2, padding: '16px', background: '#059669', color: '#fff', border: 'none', borderRadius: '15px', fontWeight: '900', cursor: 'pointer' };
+const cancelBtn = { flex: 1, padding: '16px', background: '#f1f5f9', color: '#64748b', border: 'none', borderRadius: '15px', fontWeight: '900', cursor: 'pointer' };
+const statusMsg = { textAlign: 'center', padding: '50px', color: '#94a3b8', fontWeight: 'bold' };
+const emptyState = { textAlign: 'center', padding: '60px', color: '#cbd5e1', fontWeight: '800', background: '#fff', borderRadius: '25px' };
+
+const responsiveCSS = `
+  @media (max-width: 600px) {
+    .resp-grid { grid-template-columns: 1fr !important; }
+    .doc-resp-grid { grid-template-columns: 1fr !important; }
+    .card-grid { grid-template-columns: 1fr !important; }
+  }
+`;
 
 export default AdvisorVerification;
