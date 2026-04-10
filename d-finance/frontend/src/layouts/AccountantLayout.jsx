@@ -21,6 +21,39 @@ const AccountantLayout = () => {
   return (
     <div style={{ display: 'flex', minHeight: '100vh', background: '#f8fafc', position: 'relative' }}>
       
+      {/* --- Inline CSS to handle Errors & Animations --- */}
+      <style>{`
+        .pulse { animation: pulse-red 2s infinite; margin-right: 5px; }
+        @keyframes pulse-red { 0% { opacity: 1; } 50% { opacity: 0.5; } 100% { opacity: 1; } }
+        
+        .sidebar-transition {
+          transition: all 0.3s ease-in-out;
+        }
+
+        /* Responsive Logic Fix */
+        @media (min-width: 901px) {
+          .sidebar-container {
+            left: 0 !important;
+          }
+          .main-content-area {
+            margin-left: 300px !important;
+          }
+          .hamburger-btn, .close-menu-btn {
+            display: none !important;
+          }
+        }
+
+        @media (max-width: 900px) {
+          .hide-mobile {
+            display: none !important;
+          }
+          .main-content-area {
+            margin-left: 0 !important;
+            padding: 15px !important;
+          }
+        }
+      `}</style>
+      
       {/* --- Sidebar Overlay for Mobile --- */}
       {isMobileMenuOpen && (
         <div 
@@ -30,16 +63,20 @@ const AccountantLayout = () => {
       )}
 
       {/* --- Accountant Premium Sidebar --- */}
-      <div style={{
-        ...sidebarStyle,
-        left: isMobileMenuOpen ? '0' : '-300px', // Mobile toggle logic
-      }} className="sidebar-transition">
+      <aside 
+        style={{
+          ...sidebarStyle,
+          left: isMobileMenuOpen ? '0' : '-300px',
+        }} 
+        className="sidebar-transition sidebar-container"
+      >
         <div style={brandBox}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <h2 style={brandTitle}>D-FINANCE</h2>
             <button 
               onClick={() => setIsMobileMenuOpen(false)} 
-              style={closeMenuBtn}
+              className="close-menu-btn"
+              style={iconBtnStyle}
             >
               <FiX size={20} />
             </button>
@@ -50,37 +87,10 @@ const AccountantLayout = () => {
         <nav style={navStyle}>
           <p style={navLabel}>Main Menu</p>
           
-          <Link 
-            to="/accountant/approval" 
-            onClick={() => setIsMobileMenuOpen(false)}
-            style={isActive('/accountant/approval') ? activeLink : linkStyle}
-          >
-            <FiCheckCircle size={18} /> Final Auth Queue
-          </Link>
-
-          <Link 
-            to="/accountant/payment-approval" 
-            onClick={() => setIsMobileMenuOpen(false)}
-            style={isActive('/accountant/payment-approval') ? activeLink : linkStyle}
-          >
-            <FiCreditCard size={18} /> EMI Approval
-          </Link>
-
-          <Link 
-            to="/accountant/reports" 
-            onClick={() => setIsMobileMenuOpen(false)}
-            style={isActive('/accountant/reports') ? activeLink : linkStyle}
-          >
-            <FiBarChart size={18} /> Reports
-          </Link>
-          
-          <Link 
-            to="/accountant/bulk-data" 
-            onClick={() => setIsMobileMenuOpen(false)}
-            style={isActive('/accountant/bulk-data') ? activeLink : linkStyle}
-          >
-            <FiDownload size={18} /> Bulk Data
-          </Link>
+          <MenuLink to="/accountant/approval" icon={<FiCheckCircle />} label="Final Auth Queue" active={isActive('/accountant/approval')} closeMobile={() => setIsMobileMenuOpen(false)} />
+          <MenuLink to="/accountant/payment-approval" icon={<FiCreditCard />} label="EMI Approval" active={isActive('/accountant/payment-approval')} closeMobile={() => setIsMobileMenuOpen(false)} />
+          <MenuLink to="/accountant/reports" icon={<FiBarChart />} label="Reports" active={isActive('/accountant/reports')} closeMobile={() => setIsMobileMenuOpen(false)} />
+          <MenuLink to="/accountant/bulk-data" icon={<FiDownload />} label="Bulk Data" active={isActive('/accountant/bulk-data')} closeMobile={() => setIsMobileMenuOpen(false)} />
           
           <div style={{ marginTop: 'auto', paddingTop: '20px' }}>
             <button onClick={handleLogout} style={logoutBtn}>
@@ -88,17 +98,18 @@ const AccountantLayout = () => {
             </button>
           </div>
         </nav>
-      </div>
+      </aside>
 
       {/* --- Main Content Area --- */}
-      <div style={mainAreaStyle}>
+      <div className="main-content-area" style={mainAreaStyle}>
         
         <header style={headerStyle}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
             {/* Hamburger for Mobile */}
             <button 
               onClick={() => setIsMobileMenuOpen(true)} 
-              style={hamburgerBtn}
+              className="hamburger-btn"
+              style={iconBtnStyle}
             >
               <FiMenu size={24} />
             </button>
@@ -125,22 +136,20 @@ const AccountantLayout = () => {
           © 2026 D-Finance Ledger | Mathura Branch
         </footer>
       </div>
-
-      <style>{`
-        .pulse { animation: pulse-red 2s infinite; margin-right: 5px; }
-        @keyframes pulse-red { 0% { opacity: 1; } 50% { opacity: 0.5; } 100% { opacity: 1; } }
-        
-        .sidebar-transition {
-          transition: all 0.3s ease-in-out;
-        }
-
-        @media (max-width: 900px) {
-          .hide-mobile { display: none !important; }
-        }
-      `}</style>
     </div>
   );
 };
+
+// --- Sub-component for Nav Links ---
+const MenuLink = ({ to, icon, label, active, closeMobile }) => (
+  <Link 
+    to={to} 
+    onClick={closeMobile}
+    style={active ? activeLink : linkStyle}
+  >
+    {React.cloneElement(icon, { size: 18 })} {label}
+  </Link>
+);
 
 // --- Styles ---
 const sidebarStyle = { 
@@ -153,7 +162,6 @@ const sidebarStyle = {
   position: 'fixed',
   height: '100vh',
   zIndex: 1001,
-  // Initial left value handled in component
 };
 
 const overlayStyle = {
@@ -168,17 +176,9 @@ const mainAreaStyle = {
   flex: 1, 
   padding: '20px', 
   overflowY: 'auto',
-  marginLeft: '0', // Default for mobile
-  // Desktop adjustments via media query would be better, 
-  // but using responsive inline logic here:
-  '@media (min-width: 901px)': { marginLeft: '300px' } 
+  display: 'flex',
+  flexDirection: 'column'
 };
-
-// Update mainAreaStyle logic for desktop padding
-if (typeof window !== 'undefined' && window.innerWidth > 900) {
-  sidebarStyle.left = '0';
-  mainAreaStyle.paddingLeft = '320px';
-}
 
 const brandBox = { padding: '30px 20px', textAlign: 'center', borderBottom: '1px solid #1e293b' };
 const brandTitle = { color: '#10b981', margin: 0, fontSize: '22px', fontWeight: 900, letterSpacing: '1px' };
@@ -197,6 +197,8 @@ const activeLink = {
   ...linkStyle, background: '#1e293b', color: '#fff', borderLeft: '4px solid #10b981' 
 };
 
+const iconBtnStyle = { background: 'none', border: 'none', color: '#0f172a', cursor: 'pointer', padding: 0, display: 'flex', alignItems: 'center' };
+
 const logoutBtn = { 
   width: '100%', background: 'rgba(239, 68, 68, 0.1)', color: '#ef4444', 
   border: '1px solid rgba(239, 68, 68, 0.2)', padding: '12px', 
@@ -212,8 +214,6 @@ const headerStyle = {
 
 const headerUserText = { margin: 0, color: '#0f172a', fontWeight: 800, fontSize: '16px' };
 const headerSubText = { color: '#64748b', fontWeight: 600, fontSize: '12px' };
-const hamburgerBtn = { background: 'none', border: 'none', color: '#0f172a', cursor: 'pointer', display: window.innerWidth > 900 ? 'none' : 'block' };
-const closeMenuBtn = { background: 'none', border: 'none', color: '#94a3b8', cursor: 'pointer', display: window.innerWidth > 900 ? 'none' : 'block' };
 
 const userAvatar = { width: '40px', height: '40px', background: '#ecfdf5', borderRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center' };
 const statusBadge = { background: '#dcfce7', color: '#166534', padding: '6px 12px', borderRadius: '10px', fontSize: '11px', fontWeight: 800, display: 'flex', alignItems: 'center' };

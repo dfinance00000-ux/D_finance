@@ -39,8 +39,17 @@ const LoanSchema = new mongoose.Schema({
   tenureMonths: { type: Number, required: [true, "Tenure is required"] }, 
   totalWeeks: { type: Number }, 
   totalDays: { type: Number },
-  weeklyEMI: { type: Number },
-  dailyEMI: { type: Number },
+  
+  // Frontend sends 'emiType' (Daily EMI / Weekly EMI)
+  emiType: { type: String }, 
+  
+  // Frontend sends 'installmentAmount'
+  installmentAmount: { type: Number },
+  totalInstallments: { type: Number },
+
+  weeklyEMI: { type: Number }, // Fallback for older code
+  dailyEMI: { type: Number },  // Fallback for older code
+  
   totalPayable: { type: Number, required: [true, "Total Payable amount is required"] }, 
   
   // --- 🏦 BANK DETAILS ---
@@ -66,20 +75,31 @@ const LoanSchema = new mongoose.Schema({
   nomineeMobile: { type: String },
   nomineeAddress: { type: String },
   nomineeGender: { type: String },
+  nomineeCategory: { type: String }, // Added to match LUC form
 
   // --- 🏠 FIELD AUDIT DETAILS ---
   religion: { type: String },
   category: { type: String },
   houseType: { type: String },
+  areaType: { type: String }, // Added (Rural/Urban)
   monthlyIncome: { type: String },
   inspectionDate: { type: Date },
 
   // --- 📂 Categorization ---
   type: { 
     type: String, 
-    enum: ['Personal Loan', 'JLG Loan', 'Agriculture Loan', 'Business Loan'],
+    // 🔥 UPDATED ENUM: Added Daily EMI and Weekly EMI to fix your error
+    enum: [
+      'Personal Loan', 
+      'JLG Loan', 
+      'Agriculture Loan', 
+      'Business Loan', 
+      'Daily EMI', 
+      'Weekly EMI'
+    ],
     default: 'JLG Loan'
   },
+  
   emiFrequency: { 
     type: String, 
     enum: ['Daily', 'Weekly', 'Monthly'], 
@@ -90,7 +110,8 @@ const LoanSchema = new mongoose.Schema({
   status: { 
     type: String, 
     enum: [
-      'Pending',                // 🔥 Added for general use
+      'Pending',
+      'Applied',
       'Hold - Pending Assignment', 
       'Pending Verification', 
       'Verification Pending', 
@@ -100,11 +121,12 @@ const LoanSchema = new mongoose.Schema({
       'Rejected', 
       'Closed'
     ], 
-    default: 'Pending Verification' 
+    default: 'Verification Pending' 
   },
 
   // --- 💳 Repayment Tracking ---
   totalPaid: { type: Number, default: 0 },
+  paidInstallments: { type: Number, default: 0 }, // For tracking schedule
   totalPending: { type: Number }, 
   nextEmiDate: Date,
   
