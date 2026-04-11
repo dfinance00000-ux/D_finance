@@ -8,15 +8,14 @@ Cashfree.XClientId = "12575675075b22f889264cda78b7657521";
 Cashfree.XClientSecret = "cfsk_ma_prod_8e3ff1ae55940c09c2e4944c0d0ba0c6_13b34662";
 Cashfree.XEnvironment = Cashfree.Environment.PRODUCTION;
 
-// 1. CREATE ORDER (For Custom Portal Integration)
+// 1. CREATE ORDER (For In-App Buttons)
 exports.createOrder = async (req, res) => {
     try {
         const { amount, customerId, customerName, customerPhone, loanId } = req.body;
-
         const request = {
             order_amount: amount,
             order_currency: "INR",
-            order_id: `ORD_${Date.now()}_${loanId}`,
+            order_id: `ORD_${Date.now()}_${loanId}`, // Tracking LoanId in OrderId
             customer_details: {
                 customer_id: customerId,
                 customer_name: customerName,
@@ -28,7 +27,6 @@ exports.createOrder = async (req, res) => {
             },
             order_note: `EMI Repayment for Loan: ${loanId}`
         };
-
         const response = await Cashfree.PGCreateOrder("2023-08-01", request);
         res.status(200).json(response.data);
     } catch (err) {
@@ -37,7 +35,7 @@ exports.createOrder = async (req, res) => {
     }
 };
 
-// 2. VERIFY & AUTO-SETTLE (Manual Redirect Verification)
+// 2. VERIFY (Manual Verification)
 exports.verifyAndSavePayment = async (req, res) => {
     try {
         const { order_id } = req.body;
@@ -45,64 +43,59 @@ exports.verifyAndSavePayment = async (req, res) => {
         const orderData = response.data;
 
         if (orderData.order_status === "PAID") {
-            // Extract LoanId if it follows our ORD_..._LOANID pattern
-            let loanId = null;
-            if (order_id.includes('_')) {
-                const parts = order_id.split('_');
-                loanId = parts[parts.length - 1];
-            }
-
+            let loanId = order_id.includes('_') ? order_id.split('_').pop() : null;
             const result = await settleEMIPayment(orderData, loanId);
             return res.status(200).json(result);
-        } else {
-            return res.status(400).json({ success: false, message: "Payment not completed yet." });
         }
+        res.status(400).json({ success: false, message: "Payment not completed." });
     } catch (err) {
-        console.error("Verification Error:", err);
-        res.status(500).json({ error: "Failed to verify payment" });
+        res.status(500).json({ error: "Verification failed" });
     }
 };
 
-// 3. 🔥 WEBHOOK HANDLING (Automated Settlement)
+// 3. 🔥 WEBHOOK (Handle Forms, Links & Buttons)
 exports.handleWebhook = async (req, res) => {
-    console.log("📩 Webhook Received from Cashfree...");
+    console.log("📩 Webhook Triggered...");
     try {
         const signature = req.headers["x-webhook-signature"];
         const timestamp = req.headers["x-webhook-timestamp"];
-        const rawBody = JSON.stringify(req.body);
+        const rawBody = req.rawBody || JSON.stringify(req.body); // Use rawBody for security
 
-        // --- 🛡️ SECURITY: Signature Verification ---
+        // 🛡️ SECURITY: Verify Signature
         const secretKey = Cashfree.XClientSecret;
         const signedPayload = timestamp + rawBody;
-        const expectedSignature = crypto
-            .createHmac('sha256', secretKey)
-            .update(signedPayload)
-            .digest('base64');
+        const expectedSignature = crypto.createHmac('sha256', secretKey)
+            .update(signedPayload).digest('base64');
 
         if (signature !== expectedSignature) {
-            console.error("❌ Invalid Webhook Signature!");
+            console.error("❌ Invalid Signature!");
             return res.status(401).send("Unauthorized");
         }
 
-        const { data } = req.body;
-        const orderId = data.order.order_id;
-        const status = data.payment.payment_status;
-
-        if (status === "SUCCESS") {
-            let loanId = null;
+        const { data, type } = req.body;
+        
+        // Handle SUCCESS events for both Gateway and Payment Links
+        if (type.includes("SUCCESS") || type === "PAYMENT_LINK_PAID") {
+            const orderDetails = data.order || data.payment_link;
+            const paymentDetails = data.payment;
             
-            // Try to get Loan ID from order_id (ORD_..._loanId)
-            if (orderId.startsWith('ORD_')) {
-                const parts = orderId.split('_');
-                loanId = parts[parts.length - 1];
+            const orderId = orderDetails.order_id || orderDetails.link_id;
+            const amount = orderDetails.order_amount || orderDetails.link_amount_paid;
+            const customerId = data.customer_details.customer_id;
+
+            // Try to find Loan ID from Order ID or Link Purpose
+            let loanId = null;
+            if (orderId && orderId.includes('_')) {
+                loanId = orderId.split('_').pop();
+            } else if (orderDetails.link_purpose) {
+                loanId = orderDetails.link_purpose; // Agar link purpose mein Loan ID likha ho
             }
 
-            // Settlement call
             await settleEMIPayment({
-                order_amount: data.order.order_amount,
-                cf_payment_id: data.payment.cf_payment_id,
+                order_amount: amount,
+                cf_payment_id: paymentDetails.cf_payment_id,
                 order_id: orderId,
-                customer_id: data.customer_details.customer_id // Pass customer ID as backup
+                customer_id: customerId
             }, loanId);
         }
         res.status(200).send("OK");
@@ -112,32 +105,29 @@ exports.handleWebhook = async (req, res) => {
     }
 };
 
-// --- ⚙️ HELPER FUNCTION: Ledger Adjustment Logic ---
+// --- ⚙️ HELPER: The "Smart" Accountant ---
 async function settleEMIPayment(orderData, loanId) {
     const transactionId = orderData.cf_payment_id || orderData.order_id;
     
-    // 1. Check for duplicates
-    const existingPayment = await Payment.findOne({ transactionId });
-    if (existingPayment) {
-        console.log("⚠️ Payment already processed:", transactionId);
-        return { success: true, message: "Already Processed" };
-    }
+    // 1. Duplicate Check
+    const existing = await Payment.findOne({ transactionId });
+    if (existing) return { success: true, message: "Already Processed" };
 
-    // 2. Find Loan (Either by loanId or customerId)
-    let loan;
-    if (loanId) {
-        loan = await Loan.findOne({ loanId });
-    } else {
-        // Backup: Find active loan for this customer (Useful for Payment Forms)
-        loan = await Loan.findOne({ customerId: orderData.customer_id, status: 'Active' });
-    }
+    // 2. 🔥 SMART LOAN FINDER
+    // Strategy: Search by LoanId first, then by CustomerId (Backup for Forms)
+    let loan = await Loan.findOne({ 
+        $or: [
+            { loanId: loanId }, 
+            { customerId: orderData.customer_id, status: 'Active' }
+        ] 
+    });
 
     if (!loan) {
-        console.error("❌ Loan not found for ID:", loanId || orderData.customer_id);
+        console.error(`❌ Loan not found for ID: ${loanId} or Customer: ${orderData.customer_id}`);
         return { success: false, message: "Loan not found" };
     }
 
-    // 3. Record Payment
+    // 3. Save Record
     const newPayment = new Payment({
       loanId: loan.loanId,
       customerId: loan.customerId,
@@ -156,10 +146,7 @@ async function settleEMIPayment(orderData, loanId) {
     await Loan.findOneAndUpdate(
       { loanId: loan.loanId },
       { 
-        $set: { 
-            nextEmiDate: new Date(Date.now() + daysToAdd * 24 * 60 * 60 * 1000),
-            status: 'Active' 
-        },
+        $set: { nextEmiDate: new Date(Date.now() + daysToAdd * 24 * 60 * 60 * 1000) },
         $inc: { 
             totalPaid: orderData.order_amount, 
             paidInstallments: 1,
@@ -168,6 +155,6 @@ async function settleEMIPayment(orderData, loanId) {
       }
     );
 
-    console.log(`✅ EMI Settled: Loan ${loan.loanId}, Amount ₹${orderData.order_amount}`);
-    return { success: true, message: "Ledger Adjusted Successfully" };
+    console.log(`✅ EMI Adjusted: ${loan.customerName} - ₹${orderData.order_amount}`);
+    return { success: true };
 }

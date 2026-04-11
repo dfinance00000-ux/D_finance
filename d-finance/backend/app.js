@@ -10,9 +10,10 @@ const app = express();
 app.use(cors());
 // app.use(express.json()); // 👈 Ye line Webhook ka JSON data padhne ke liye sabse zaroori hai
 // app.js mein express.json() ko aise likho taaki raw body mil sake
-app.use(express.json({
+
+ app.use(express.json({
   verify: (req, res, buf) => {
-    req.rawBody = buf.toString();
+    req.rawBody = buf.toString(); // Ye signature verify karne ke liye zaroori hai
   }
 }));
 // --- Routes Registration ---
