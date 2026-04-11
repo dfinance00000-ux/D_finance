@@ -1,5 +1,5 @@
 const { Cashfree } = require('cashfree-pg');
-const crypto = require('crypto'); // Signature verify karne ke liye
+const crypto = require('crypto');
 const Payment = require('../models/Payment');
 const Loan = require('../models/Loan');
 
@@ -8,7 +8,7 @@ Cashfree.XClientId = "12575675075b22f889264cda78b7657521";
 Cashfree.XClientSecret = "cfsk_ma_prod_8e3ff1ae55940c09c2e4944c0d0ba0c6_13b34662";
 Cashfree.XEnvironment = Cashfree.Environment.PRODUCTION;
 
-// 1. CREATE ORDER
+// 1. CREATE ORDER (For Custom Portal Integration)
 exports.createOrder = async (req, res) => {
     try {
         const { amount, customerId, customerName, customerPhone, loanId } = req.body;
@@ -37,7 +37,7 @@ exports.createOrder = async (req, res) => {
     }
 };
 
-// 2. VERIFY & AUTO-SETTLE (Frontend Redirect ke baad)
+// 2. VERIFY & AUTO-SETTLE (Manual Redirect Verification)
 exports.verifyAndSavePayment = async (req, res) => {
     try {
         const { order_id } = req.body;
@@ -45,8 +45,12 @@ exports.verifyAndSavePayment = async (req, res) => {
         const orderData = response.data;
 
         if (orderData.order_status === "PAID") {
-            const parts = order_id.split('_');
-            const loanId = parts[parts.length - 1];
+            // Extract LoanId if it follows our ORD_..._LOANID pattern
+            let loanId = null;
+            if (order_id.includes('_')) {
+                const parts = order_id.split('_');
+                loanId = parts[parts.length - 1];
+            }
 
             const result = await settleEMIPayment(orderData, loanId);
             return res.status(200).json(result);
@@ -59,14 +63,15 @@ exports.verifyAndSavePayment = async (req, res) => {
     }
 };
 
-// 3. 🔥 WEBHOOK HANDLING (Background Auto-Approval with Security)
+// 3. 🔥 WEBHOOK HANDLING (Automated Settlement)
 exports.handleWebhook = async (req, res) => {
+    console.log("📩 Webhook Received from Cashfree...");
     try {
         const signature = req.headers["x-webhook-signature"];
         const timestamp = req.headers["x-webhook-timestamp"];
         const rawBody = JSON.stringify(req.body);
 
-        // --- 🛡️ SECURITY: Verify Webhook Signature ---
+        // --- 🛡️ SECURITY: Signature Verification ---
         const secretKey = Cashfree.XClientSecret;
         const signedPayload = timestamp + rawBody;
         const expectedSignature = crypto
@@ -84,13 +89,20 @@ exports.handleWebhook = async (req, res) => {
         const status = data.payment.payment_status;
 
         if (status === "SUCCESS") {
-            const parts = orderId.split('_');
-            const loanId = parts[parts.length - 1];
+            let loanId = null;
             
+            // Try to get Loan ID from order_id (ORD_..._loanId)
+            if (orderId.startsWith('ORD_')) {
+                const parts = orderId.split('_');
+                loanId = parts[parts.length - 1];
+            }
+
+            // Settlement call
             await settleEMIPayment({
                 order_amount: data.order.order_amount,
                 cf_payment_id: data.payment.cf_payment_id,
-                order_id: orderId
+                order_id: orderId,
+                customer_id: data.customer_details.customer_id // Pass customer ID as backup
             }, loanId);
         }
         res.status(200).send("OK");
@@ -100,20 +112,34 @@ exports.handleWebhook = async (req, res) => {
     }
 };
 
-// --- ⚙️ HELPER FUNCTION: Ledger Adjustment & Approval Logic ---
+// --- ⚙️ HELPER FUNCTION: Ledger Adjustment Logic ---
 async function settleEMIPayment(orderData, loanId) {
-    // 1. Duplicate check (Using cf_payment_id or order_id)
     const transactionId = orderData.cf_payment_id || orderData.order_id;
+    
+    // 1. Check for duplicates
     const existingPayment = await Payment.findOne({ transactionId });
-    if (existingPayment) return { success: true, message: "Already Processed" };
+    if (existingPayment) {
+        console.log("⚠️ Payment already processed:", transactionId);
+        return { success: true, message: "Already Processed" };
+    }
 
-    // 2. Loan check
-    const loan = await Loan.findOne({ loanId });
-    if (!loan) return { success: false, message: "Loan not found" };
+    // 2. Find Loan (Either by loanId or customerId)
+    let loan;
+    if (loanId) {
+        loan = await Loan.findOne({ loanId });
+    } else {
+        // Backup: Find active loan for this customer (Useful for Payment Forms)
+        loan = await Loan.findOne({ customerId: orderData.customer_id, status: 'Active' });
+    }
 
-    // 3. Save Payment Record for Admin to see
+    if (!loan) {
+        console.error("❌ Loan not found for ID:", loanId || orderData.customer_id);
+        return { success: false, message: "Loan not found" };
+    }
+
+    // 3. Record Payment
     const newPayment = new Payment({
-      loanId: loanId,
+      loanId: loan.loanId,
       customerId: loan.customerId,
       customerName: loan.customerName,
       amount: orderData.order_amount,
@@ -124,12 +150,11 @@ async function settleEMIPayment(orderData, loanId) {
     });
     await newPayment.save();
 
-    // 4. Update Loan Ledger (Logic: totalPaid up, totalPending down, nextDate forward)
-    // Daily: 1 day, Weekly: 7 days
+    // 4. Update Ledger
     let daysToAdd = (loan.emiType === 'Weekly EMI' || loan.type === 'Weekly EMI') ? 7 : 1;
     
     await Loan.findOneAndUpdate(
-      { loanId: loanId },
+      { loanId: loan.loanId },
       { 
         $set: { 
             nextEmiDate: new Date(Date.now() + daysToAdd * 24 * 60 * 60 * 1000),
@@ -138,11 +163,11 @@ async function settleEMIPayment(orderData, loanId) {
         $inc: { 
             totalPaid: orderData.order_amount, 
             paidInstallments: 1,
-            totalPending: -orderData.order_amount // 👈 Amount settled!
+            totalPending: -orderData.order_amount 
         }
       }
     );
 
-    console.log(`✅ EMI Settled for Loan ${loanId}. Amount: ${orderData.order_amount}`);
+    console.log(`✅ EMI Settled: Loan ${loan.loanId}, Amount ₹${orderData.order_amount}`);
     return { success: true, message: "Ledger Adjusted Successfully" };
 }
