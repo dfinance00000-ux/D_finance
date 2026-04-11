@@ -8,8 +8,13 @@ const app = express();
 
 // --- Middlewares ---
 app.use(cors());
-app.use(express.json()); // 👈 Ye line Webhook ka JSON data padhne ke liye sabse zaroori hai
-
+// app.use(express.json()); // 👈 Ye line Webhook ka JSON data padhne ke liye sabse zaroori hai
+// app.js mein express.json() ko aise likho taaki raw body mil sake
+app.use(express.json({
+  verify: (req, res, buf) => {
+    req.rawBody = buf.toString();
+  }
+}));
 // --- Routes Registration ---
 app.use('/api/auth', authRoutes);
 app.use('/api/payments', paymentRoutes); // 🔥 2. Route register ho gaya
