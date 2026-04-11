@@ -1,137 +1,206 @@
 import React, { useState } from 'react';
 import API from '../../api/axios';
+import { FiX, FiCheckCircle, FiAlertCircle, FiCamera, FiShield } from 'react-icons/fi';
 
 const PaymentModal = ({ loan, customAmount, onClose, onRefresh }) => {
   const [utr, setUtr] = useState('');
   const [loading, setLoading] = useState(false);
 
-  // User details for backend tracking
+  // User details safely extracted
   const user = JSON.parse(localStorage.getItem('user')) || {};
 
-  // Logic: Dashboard se aaya hua amount priority hai
-  const finalAmount = Number(customAmount) || Number(loan?.dailyEMI) || 0;
+  // Priority: Dashboard amount > Loan Daily EMI > Default 0
+  const finalAmount = Number(customAmount) || Number(loan?.installmentAmount) || Number(loan?.dailyEMI) || 0;
 
-  const handleSubmitPayment = async () => {
-    // 1. Client-side Validations
+  const handleSubmitManualPayment = async () => {
+    // 1. Strict Validations
     const cleanUtr = utr.trim();
     if (!cleanUtr || cleanUtr.length < 10) {
-      return alert("⚠️ Please enter a valid 12-digit UTR Number.");
+      return alert("⚠️ Please enter a valid Transaction UTR (10-12 digits).");
     }
 
-    if (finalAmount < 200) {
-      return alert("⚠️ Minimum payment must be ₹200.");
+    if (finalAmount < 100) {
+      return alert("⚠️ Minimum payment allowed is ₹100.");
     }
     
     try {
       setLoading(true);
       
-      // 🔥 Payload: Ensuring all fields required by the new backend logic are sent
+      // 🔥 Consistent Payload for Backend
       const payload = { 
         utr: cleanUtr, 
         amount: finalAmount,
-        customerId: user.id || user._id, // Mapping for both possible ID formats
-        paymentDate: new Date().toISOString()
+        customerId: user.id || user._id,
+        customerName: user.fullName,
+        loanId: loan.loanId,
+        paymentDate: new Date().toISOString(),
+        status: 'Pending' // Initial state
       };
 
+      // API call to the specific manual payment endpoint
       const res = await API.post(`/loans/pay-manual/${loan.loanId}`, payload);
       
       if (res.data.success || res.status === 200) {
-        alert(`✅ Payment Logged!\nAmount: ₹${finalAmount}\nUTR: ${cleanUtr}\n\nAdmin will verify this shortly.`);
-        onRefresh(); // Refreshing parent component (Dashboard)
-        onClose();   // Closing modal
+        alert(`✅ Receipt Submitted!\n\nUTR: ${cleanUtr}\nAmount: ₹${finalAmount}\n\nOur accountant will verify this shortly.`);
+        onRefresh(); 
+        onClose();   
       }
     } catch (err) {
-      console.error("Submission Error Details:", err.response?.data);
+      console.error("Payment Sync Error:", err.response?.data);
       
-      // 🔥 Specific Error Handling for Duplicate UTR or Database Index Issues
       const serverError = err.response?.data?.error || "";
-      let userFriendlyError = "Server Error: Could not log payment.";
+      let errorMessage = "❌ Server failed to log payment. Try again.";
 
       if (serverError.includes("E11000") || serverError.includes("duplicate")) {
-        userFriendlyError = "❌ This UTR has already been used. Please enter a new Transaction ID.";
+        errorMessage = "❌ This UTR/Transaction ID has already been submitted.";
       } else if (serverError) {
-        userFriendlyError = "❌ " + serverError;
+        errorMessage = "❌ " + serverError;
       }
 
-      alert(userFriendlyError);
+      alert(errorMessage);
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div className="fixed inset-0 bg-slate-900/90 backdrop-blur-sm z-[9999] flex items-center justify-center p-4">
-      <div className="bg-white w-full max-w-sm rounded-[2.5rem] overflow-hidden shadow-2xl border border-slate-100 animate-in fade-in zoom-in duration-300">
+    <div style={overlayStyle}>
+      <style>{animations}</style>
+      
+      <div style={modalCard} className="modal-animate">
         
-        {/* Modal Header */}
-        <div className="px-6 py-4 bg-slate-50 border-b border-slate-100 flex justify-between items-center">
-          <div className="flex items-center gap-2">
-            <div className="w-2 h-2 bg-indigo-600 rounded-full animate-pulse"></div>
-            <p className="font-black text-slate-800 uppercase text-[10px] tracking-widest">Secure UPI Payment</p>
+        {/* Header */}
+        <div style={headerSection}>
+          <div style={shieldBadge}>
+            <FiShield size={12} /> SECURE GATEWAY
           </div>
-          <button 
-            onClick={onClose} 
-            className="w-8 h-8 flex items-center justify-center bg-white text-slate-400 rounded-full shadow-sm hover:text-red-500 hover:shadow-md transition-all"
-          >✕</button>
+          <button onClick={onClose} style={closeBtn}><FiX /></button>
         </div>
 
-        <div className="p-8 text-center">
-          <p className="text-slate-400 text-[9px] font-black uppercase tracking-[0.3em] mb-1">Payable Amount</p>
-          <div className="flex items-center justify-center gap-1 mb-6">
-            <span className="text-xl font-black text-slate-300 mt-1">₹</span>
-            <h2 className="text-5xl font-black text-slate-900 tracking-tighter">
-              {finalAmount.toLocaleString('en-IN')}
-            </h2>
+        <div style={bodyContent}>
+          <p style={labelSmall}>PAYABLE INSTALLMENT</p>
+          <div style={amountDisplay}>
+            <span style={currency}>₹</span>
+            <h2 style={amountNum}>{finalAmount.toLocaleString('en-IN')}</h2>
           </div>
 
-          {/* QR Container */}
-          <div className="relative inline-block mb-8 group">
-            <div className="absolute -inset-2 bg-indigo-500/10 rounded-[2.5rem] blur-xl opacity-0 group-hover:opacity-100 transition duration-500"></div>
-            <div className="relative bg-white p-4 rounded-[2rem] border-2 border-dashed border-slate-200">
+          {/* QR Code Section */}
+          <div style={qrContainer}>
+            <div style={qrWrapper}>
               <img 
                 src="/Payment.jpeg" 
-                alt="QR Code" 
-                className="w-40 h-40 object-contain rounded-xl mx-auto"
+                alt="Scan to Pay" 
+                style={qrImg}
                 onError={(e) => { e.target.src = "https://placehold.co/400?text=QR+NOT+FOUND"; }}
               />
             </div>
+            <p style={qrTip}>Scan using PhonePe, GPay or Paytm</p>
           </div>
 
-          <div className="text-left space-y-4">
-            {/* Input Field */}
-            <div className="bg-slate-50 p-4 rounded-3xl border border-slate-100 focus-within:bg-white focus-within:ring-2 focus-within:ring-indigo-500/10 transition-all">
-              <label className="text-[9px] font-black uppercase text-slate-400 block mb-1 tracking-widest">Transaction UTR Number</label>
+          {/* Form Area */}
+          <div style={formArea}>
+            <div style={inputBox}>
+              <label style={inputLabel}>ENTER TRANSACTION UTR / ID</label>
               <input 
                 type="text" 
-                placeholder="Ex: 4123887700..."
-                className="w-full bg-transparent border-none p-0 font-black text-slate-800 focus:ring-0 text-lg placeholder:text-slate-300"
+                placeholder="12-digit UTR Number"
+                style={fieldInput}
                 value={utr}
-                onChange={(e) => setUtr(e.target.value.toUpperCase())}
+                onChange={(e) => setUtr(e.target.value.toUpperCase().replace(/\s/g, ''))}
               />
             </div>
 
-            {/* Submit Button */}
             <button 
-              onClick={handleSubmitPayment}
-              disabled={loading || utr.length < 10}
-              className={`w-full py-5 rounded-3xl font-black uppercase tracking-[0.2em] text-[11px] transition-all shadow-lg
-                ${loading || utr.length < 10 
-                  ? 'bg-slate-100 text-slate-300 cursor-not-allowed shadow-none' 
-                  : 'bg-indigo-600 text-white hover:bg-indigo-700 hover:-translate-y-1 active:scale-95 shadow-indigo-200'
-                }`}
+              onClick={handleSubmitManualPayment}
+              disabled={loading || utr.length < 8}
+              style={loading || utr.length < 8 ? disabledBtn : activeBtn}
             >
-              {loading ? "Verifying Transaction..." : "Submit Receipt"}
+              {loading ? "AUTHENTICATING..." : "SUBMIT PAYMENT RECEIPT"}
             </button>
             
-            <p className="text-[9px] text-slate-400 text-center leading-relaxed font-medium">
-              Take a screenshot after payment. <br/>
-              Verification usually takes <span className="text-slate-800 font-bold">10-30 minutes</span>.
-            </p>
+            <div style={securityNote}>
+              <FiCheckCircle color="#10b981" size={14} />
+              <span>Funds are held in escrow until verified by D-Finance.</span>
+            </div>
           </div>
         </div>
       </div>
     </div>
   );
 };
+
+// --- MODERN STYLES ---
+const overlayStyle = {
+  position: 'fixed', inset: 0, background: 'rgba(15, 23, 42, 0.95)',
+  backdropFilter: 'blur(10px)', zIndex: 10000, display: 'flex',
+  alignItems: 'center', justifyContent: 'center', padding: '15px'
+};
+
+const modalCard = {
+  background: '#fff', width: '100%', maxWidth: '400px',
+  borderRadius: '40px', overflow: 'hidden', boxShadow: '0 25px 50px -12px rgba(0,0,0,0.5)'
+};
+
+const headerSection = {
+  padding: '20px 25px', display: 'flex', justifyContent: 'space-between',
+  alignItems: 'center', borderBottom: '1px solid #f1f5f9'
+};
+
+const shieldBadge = {
+  background: '#eef2ff', color: '#6366f1', padding: '6px 12px',
+  borderRadius: '10px', fontSize: '10px', fontWeight: '900',
+  display: 'flex', alignItems: 'center', gap: '6px'
+};
+
+const closeBtn = {
+  background: '#f8fafc', border: 'none', width: '32px', height: '32px',
+  borderRadius: '50%', cursor: 'pointer', display: 'flex',
+  alignItems: 'center', justifyContent: 'center', color: '#64748b'
+};
+
+const bodyContent = { padding: '30px', textAlign: 'center' };
+const labelSmall = { fontSize: '10px', fontWeight: '900', color: '#94a3b8', letterSpacing: '2px' };
+const amountDisplay = { display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '10px 0 30px 0' };
+const currency = { fontSize: '20px', fontWeight: '900', color: '#cbd5e1', marginTop: '5px' };
+const amountNum = { fontSize: '48px', fontWeight: '950', color: '#0f172a', letterSpacing: '-2px', margin: 0 };
+
+const qrContainer = { marginBottom: '30px' };
+const qrWrapper = {
+  background: '#fff', padding: '12px', borderRadius: '25px',
+  border: '2px dashed #e2e8f0', display: 'inline-block'
+};
+const qrImg = { width: '160px', height: '160px', objectFit: 'contain', borderRadius: '15px' };
+const qrTip = { fontSize: '11px', color: '#64748b', marginTop: '12px', fontWeight: '600' };
+
+const formArea = { textAlign: 'left' };
+const inputBox = {
+  background: '#f8fafc', padding: '15px 20px', borderRadius: '20px',
+  border: '1.5px solid #f1f5f9', marginBottom: '20px'
+};
+const inputLabel = { fontSize: '9px', fontWeight: '900', color: '#94a3b8', display: 'block', marginBottom: '8px' };
+const fieldInput = {
+  width: '100%', background: 'transparent', border: 'none', outline: 'none',
+  fontSize: '18px', fontWeight: '900', color: '#0f172a', letterSpacing: '1px'
+};
+
+const activeBtn = {
+  width: '100%', padding: '20px', background: '#0f172a', color: '#fff',
+  border: 'none', borderRadius: '20px', fontWeight: '900', cursor: 'pointer',
+  fontSize: '14px', letterSpacing: '1px', boxShadow: '0 10px 20px rgba(0,0,0,0.1)'
+};
+const disabledBtn = { ...activeBtn, background: '#f1f5f9', color: '#cbd5e1', cursor: 'not-allowed', boxShadow: 'none' };
+
+const securityNote = {
+  display: 'flex', alignItems: 'center', gap: '8px', marginTop: '20px',
+  fontSize: '10px', color: '#64748b', fontWeight: '600', lineHeight: '1.4'
+};
+
+const animations = `
+  @keyframes modalIn {
+    from { opacity: 0; transform: scale(0.9) translateY(20px); }
+    to { opacity: 1; transform: scale(1) translateY(0); }
+  }
+  .modal-animate { animation: modalIn 0.3s cubic-bezier(0.34, 1.56, 0.64, 1); }
+`;
 
 export default PaymentModal;
