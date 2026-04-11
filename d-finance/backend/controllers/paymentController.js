@@ -8,14 +8,15 @@ Cashfree.XClientId = "12575675075b22f889264cda78b7657521";
 Cashfree.XClientSecret = "cfsk_ma_prod_8e3ff1ae55940c09c2e4944c0d0ba0c6_13b34662";
 Cashfree.XEnvironment = Cashfree.Environment.PRODUCTION;
 
-// 1. CREATE ORDER (For In-App Buttons)
+// 1. CREATE ORDER (v3 SDK Compliant - Generates payment_session_id)
 exports.createOrder = async (req, res) => {
     try {
         const { amount, customerId, customerName, customerPhone, loanId } = req.body;
+
         const request = {
             order_amount: amount,
             order_currency: "INR",
-            order_id: `ORD_${Date.now()}_${loanId}`, // Tracking LoanId in OrderId
+            order_id: `ORD_${Date.now()}_${loanId}`,
             customer_details: {
                 customer_id: customerId,
                 customer_name: customerName,
@@ -23,11 +24,15 @@ exports.createOrder = async (req, res) => {
                 customer_phone: customerPhone || "9999999999",
             },
             order_meta: {
+                // Popup/Modal integration ke liye return_url optional hai par zaroori hai
                 return_url: `https://d-finance.pro/customer/tracking?order_id={order_id}`,
             },
             order_note: `EMI Repayment for Loan: ${loanId}`
         };
+
         const response = await Cashfree.PGCreateOrder("2023-08-01", request);
+        
+        // Frontend ko session id aur order id dono milenge
         res.status(200).json(response.data);
     } catch (err) {
         console.error("Cashfree Order Error:", err.response?.data || err.message);
@@ -35,7 +40,7 @@ exports.createOrder = async (req, res) => {
     }
 };
 
-// 2. VERIFY (Manual Verification)
+// 2. VERIFY (Direct API Verification)
 exports.verifyAndSavePayment = async (req, res) => {
     try {
         const { order_id } = req.body;
@@ -49,50 +54,58 @@ exports.verifyAndSavePayment = async (req, res) => {
         }
         res.status(400).json({ success: false, message: "Payment not completed." });
     } catch (err) {
+        console.error("Verification Error:", err);
         res.status(500).json({ error: "Verification failed" });
     }
 };
 
-// 3. 🔥 WEBHOOK (Handle Forms, Links & Buttons)
+// 3. 🔥 WEBHOOK (Supports Forms, Links, and SDK)
 exports.handleWebhook = async (req, res) => {
-    console.log("📩 Webhook Received: ", req.body.type);
+    console.log("📩 Webhook Received Type:", req.body.type);
     try {
         const signature = req.headers["x-webhook-signature"];
         const timestamp = req.headers["x-webhook-timestamp"];
         const rawBody = req.rawBody || JSON.stringify(req.body);
 
-        // 🛡️ Signature Verification
+        // 🛡️ SECURITY: Verify Signature
         const secretKey = Cashfree.XClientSecret;
         const signedPayload = timestamp + rawBody;
         const expectedSignature = crypto.createHmac('sha256', secretKey)
             .update(signedPayload).digest('base64');
 
         if (signature !== expectedSignature) {
-            console.error("❌ Invalid Signature!");
+            console.error("❌ Invalid Webhook Signature!");
             return res.status(401).send("Unauthorized");
         }
 
         const { data, type } = req.body;
-        
-        // --- 🔥 HANDLING PAYMENT FORMS (As per your payload) ---
-        if (type === "PAYMENT_FORM_ORDER_WEBHOOK" || type.includes("SUCCESS")) {
-            const orderData = data.order;
-            const status = orderData.order_status;
+
+        // Logics for different webhook types
+        if (type === "PAYMENT_FORM_ORDER_WEBHOOK" || type.includes("SUCCESS") || type === "PAYMENT_LINK_PAID") {
+            
+            const orderData = data.order || data.payment_link;
+            const paymentData = data.payment || {};
+            
+            const status = orderData.order_status || paymentData.payment_status;
 
             if (status === "PAID" || status === "SUCCESS") {
-                const amount = orderData.order_amount;
-                const transactionId = orderData.transaction_id || orderData.order_id;
-                
-                // Form se aane wali customer details (Isme hum customer_id dhundenge)
-                const customerPhone = orderData.customer_details.customer_phone;
-                const customerName = orderData.customer_details.customer_name;
+                const amount = orderData.order_amount || orderData.link_amount_paid;
+                const transactionId = paymentData.cf_payment_id || orderData.transaction_id || orderData.order_id;
+                const orderId = orderData.order_id || orderData.link_id;
 
-                // 💡 SMART SEARCH: Pehle phone number ya name se customer ka active loan dhundo
-                // Kyunki Form mein shayad MongoDB ID na ho
+                // Customer Details for searching loan
+                const customerPhone = data.customer_details?.customer_phone;
+                const customerName = data.customer_details?.customer_name;
+                const customerIdFromCashfree = data.customer_details?.customer_id;
+
+                // 💡 SMART SEARCH: Match by OrderId logic, then Phone, then CustomerId
+                let extractedLoanId = orderId.includes('_') ? orderId.split('_').pop() : (orderData.link_purpose || null);
+
                 const loan = await Loan.findOne({ 
                     $or: [
+                        { loanId: extractedLoanId },
                         { customerPhone: customerPhone },
-                        { customerName: customerName }
+                        { customerId: customerIdFromCashfree }
                     ],
                     status: 'Active' 
                 });
@@ -101,43 +114,37 @@ exports.handleWebhook = async (req, res) => {
                     await settleEMIPayment({
                         order_amount: amount,
                         cf_payment_id: transactionId,
-                        order_id: orderData.order_id,
+                        order_id: orderId,
                         customer_id: loan.customerId
                     }, loan.loanId);
                 } else {
-                    console.error("❌ Loan not found for customer:", customerName);
+                    console.error("❌ Loan not found for customer:", customerName || customerIdFromCashfree);
                 }
             }
         }
         res.status(200).send("OK");
     } catch (err) {
-        console.error("Webhook Error:", err);
+        console.error("Webhook Error Processing:", err);
         res.status(500).send("Internal Error");
     }
 };
+
 // --- ⚙️ HELPER: The "Smart" Accountant ---
 async function settleEMIPayment(orderData, loanId) {
     const transactionId = orderData.cf_payment_id || orderData.order_id;
     
     // 1. Duplicate Check
     const existing = await Payment.findOne({ transactionId });
-    if (existing) return { success: true, message: "Already Processed" };
-
-    // 2. 🔥 SMART LOAN FINDER
-    // Strategy: Search by LoanId first, then by CustomerId (Backup for Forms)
-    let loan = await Loan.findOne({ 
-        $or: [
-            { loanId: loanId }, 
-            { customerId: orderData.customer_id, status: 'Active' }
-        ] 
-    });
-
-    if (!loan) {
-        console.error(`❌ Loan not found for ID: ${loanId} or Customer: ${orderData.customer_id}`);
-        return { success: false, message: "Loan not found" };
+    if (existing) {
+        console.log("⚠️ Payment already processed:", transactionId);
+        return { success: true };
     }
 
-    // 3. Save Record
+    // 2. Find Loan
+    const loan = await Loan.findOne({ loanId });
+    if (!loan) return { success: false, message: "Loan not found" };
+
+    // 3. Save Payment Record
     const newPayment = new Payment({
       loanId: loan.loanId,
       customerId: loan.customerId,
@@ -165,6 +172,6 @@ async function settleEMIPayment(orderData, loanId) {
       }
     );
 
-    console.log(`✅ EMI Adjusted: ${loan.customerName} - ₹${orderData.order_amount}`);
+    console.log(`✅ Automated Settlement Done: ${loan.customerName} | Amount: ₹${orderData.order_amount}`);
     return { success: true };
 }
