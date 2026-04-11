@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import API from "../../api/axios";
-import PaymentModal from "../Payment/PaymentModal"; // 🚀 Ensure path is correct
+import PaymentModal from "../Payment/PaymentModal"; 
 
 const CustomerDashboard = () => {
   const [loans, setLoans] = useState([]);
@@ -13,6 +13,7 @@ const CustomerDashboard = () => {
   const user = JSON.parse(localStorage.getItem('user')) || {};
   const navigate = useNavigate();
 
+  // --- 🔄 FETCH DATA FROM BACKEND ---
   const fetchData = useCallback(async () => {
     if (!user.id && !user._id) return;
     try {
@@ -35,17 +36,29 @@ const CustomerDashboard = () => {
     return () => clearInterval(interval); 
   }, [fetchData]);
 
+  // --- 📊 LOGIC & CALCULATIONS ---
   const activeLoan = loans.find(l => l.status === 'Disbursed' || l.status === 'Approved');
   const pendingLoan = loans.find(l => ['Applied', 'Verification Pending', 'Field Verified'].includes(l.status));
   
   const totalApplied = loans.reduce((acc, curr) => acc + Number(curr.amount || 0), 0);
-  const totalPaid = payments.reduce((acc, curr) => acc + Number(curr.amount || 0), 0);
+  const totalPaid = payments
+    .filter(p => p.status === 'Approved')
+    .reduce((acc, curr) => acc + Number(curr.amount || 0), 0);
 
-  // QR Modal Open function
+  // 🚀 FIXED: Smart Payment Trigger
   const openQR = (loan) => {
-    setSelectedLoan(loan);
+    // EMI amount check (weeklyEMI pehle, phir emiAmount)
+    const amountToPay = loan.weeklyEMI || loan.emiAmount || 0;
+    
+    // selectedLoan state update with guaranteed amount key
+    setSelectedLoan({
+      ...loan,
+      installmentAmount: amountToPay 
+    });
     setShowModal(true);
   };
+
+  if (loading) return <div style={{textAlign: 'center', padding: '50px', fontWeight: 'bold'}}>Loading Dashboard...</div>;
 
   return (
     <div style={container}>
@@ -61,15 +74,26 @@ const CustomerDashboard = () => {
 
       {/* 2. Stats Grid */}
       <div style={grid4}>
-        <div style={card}><span style={label}>Status</span><p style={{ ...val, color: activeLoan ? '#10b981' : '#f59e0b' }}>{activeLoan ? '✅ Active' : pendingLoan ? '⏳ Processing' : '🆕 Ready'}</p></div>
-        <div style={card}><span style={label}>Total Credit</span><p style={val}>₹{totalApplied.toLocaleString()}</p></div>
-        <div style={card}><span style={label}>Weekly EMI</span><p style={{ ...val, color: '#2563eb' }}>₹{activeLoan ? (activeLoan.weeklyEMI || activeLoan.emiAmount) : '0'}</p></div>
-        <div style={card}><span style={label}>Total Repaid</span><p style={{ ...val, color: '#059669' }}>₹{totalPaid.toLocaleString()}</p></div>
+        <div style={card}>
+            <span style={label}>Status</span>
+            <p style={{ ...val, color: activeLoan ? '#10b981' : '#f59e0b' }}>
+                {activeLoan ? '✅ Active' : pendingLoan ? '⏳ Processing' : '🆕 Ready'}
+            </p>
+        </div>
+        <div style={card}><span style={label}>Total Credit</span><p style={val}>₹{totalApplied.toLocaleString('en-IN')}</p></div>
+        <div style={card}>
+            <span style={label}>Weekly EMI</span>
+            <p style={{ ...val, color: '#2563eb' }}>
+                ₹{activeLoan ? (activeLoan.weeklyEMI || activeLoan.emiAmount || 0) : '0'}
+            </p>
+        </div>
+        <div style={card}><span style={label}>Total Repaid</span><p style={{ ...val, color: '#059669' }}>₹{totalPaid.toLocaleString('en-IN')}</p></div>
       </div>
 
-      {/* 3. Main Grid */}
+      {/* 3. Main Content Grid */}
       <div className="dashboard-main-grid" style={mainGrid}>
         
+        {/* Left Column: Applications Table */}
         <div style={leftCol}>
           {activeLoan && (
             <div style={activeAlert}>
@@ -96,7 +120,7 @@ const CustomerDashboard = () => {
                       <tr key={l._id} style={tableRow}>
                         <td>{new Date(l.createdAt).toLocaleDateString()}</td>
                         <td style={{fontWeight: 'bold'}}>{l.loanId || '---'}</td>
-                        <td style={{fontWeight: '700'}}>₹{l.amount.toLocaleString()}</td>
+                        <td style={{fontWeight: '700'}}>₹{l.amount.toLocaleString('en-IN')}</td>
                         <td><span style={statusBadge(l.status)}>{l.status}</span></td>
                       </tr>
                     ))
@@ -107,7 +131,7 @@ const CustomerDashboard = () => {
           </div>
         </div>
 
-        {/* 4. Sidebar: Repayment Center */}
+        {/* Right Column: Sidebar Repayment */}
         <div className="sidebar">
           <div style={sectionCard}>
             <h4 style={sectionTitle}>💳 Repayment Center</h4>
@@ -115,17 +139,22 @@ const CustomerDashboard = () => {
               <div style={{textAlign: 'center'}}>
                 <div style={emiDisplay}>
                   <span style={miniLabel}>WEEKLY INSTALLMENT</span>
-                  <h2 style={emiVal}>₹{activeLoan.weeklyEMI || activeLoan.emiAmount}</h2>
+                  <h2 style={emiVal}>₹{activeLoan.weeklyEMI || activeLoan.emiAmount || 0}</h2>
                   <div style={emiTag}>Loan ID: {activeLoan.loanId}</div>
                 </div>
                 
-                {/* 🚀 Manual QR Payment Button */}
-                <button onClick={() => openQR(activeLoan)} style={payBtn}>
-                  Scan & Pay EMI via QR
+                {/* 🚀 FIXED BUTTON TRIGGER */}
+                <button 
+                  onClick={() => openQR(activeLoan)} 
+                  style={payBtn}
+                  onMouseOver={(e) => e.target.style.background = '#1e293b'}
+                  onMouseOut={(e) => e.target.style.background = '#0f172a'}
+                >
+                  Pay EMI via Gateway
                 </button>
                 
                 <div style={syncNote}>
-                  ⚠️ <b>Verification:</b> Manual payments are updated after accountant approval (usually 2-4 hours).
+                  ⚠️ <b>Verification:</b> Cashfree payments are updated <b>instantly</b> in your ledger.
                 </div>
               </div>
             ) : (
@@ -137,10 +166,9 @@ const CustomerDashboard = () => {
             )}
           </div>
         </div>
-
       </div>
 
-      {/* --- QR Modal Integration --- */}
+      {/* --- MODAL INTEGRATION --- */}
       {showModal && selectedLoan && (
         <PaymentModal 
           loan={selectedLoan} 
@@ -160,7 +188,7 @@ const CustomerDashboard = () => {
   );
 };
 
-// --- Styles ---
+// --- 🎨 STYLES (Keep exactly as before) ---
 const container = { padding: '20px', maxWidth: '1200px', margin: '0 auto', background: '#f8fafc', minHeight: '100vh' };
 const headerFlex = { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '35px', flexWrap: 'wrap' };
 const portalTitle = { color: '#0f172a', margin: 0, fontWeight: '900', fontSize: '24px', letterSpacing: '-1px' };
@@ -178,7 +206,7 @@ const emiDisplay = { background: '#f8fafc', padding: '30px 15px', borderRadius: 
 const miniLabel = { fontSize: '9px', fontWeight: '900', color: '#64748b', letterSpacing: '1px' };
 const emiVal = { margin: '8px 0', fontSize: '36px', color: '#0f172a', fontWeight: '900' };
 const emiTag = { display: 'inline-block', padding: '4px 10px', background: '#e0f2fe', color: '#0369a1', borderRadius: '8px', fontSize: '10px', fontWeight: '800' };
-const payBtn = { width: '100%', padding: '18px', background: '#0f172a', color: '#fff', border: 'none', borderRadius: '18px', fontWeight: '900', cursor: 'pointer', fontSize: '14px', textTransform: 'uppercase' };
+const payBtn = { width: '100%', padding: '18px', background: '#0f172a', color: '#fff', border: 'none', borderRadius: '18px', fontWeight: '900', cursor: 'pointer', fontSize: '14px', transition: '0.3s' };
 const syncNote = { marginTop: '15px', padding: '12px', background: '#fff9db', borderRadius: '12px', fontSize: '10px', color: '#856404', border: '1px solid #ffeeba' };
 const applyBtn = { padding: '12px 24px', background: '#059669', color: '#fff', border: 'none', borderRadius: '14px', fontWeight: '900', cursor: 'pointer', fontSize: '12px' };
 const tableStyle = { width: '100%', borderCollapse: 'collapse' };
