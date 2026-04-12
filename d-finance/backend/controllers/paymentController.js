@@ -77,51 +77,47 @@ exports.verifyAndSavePayment = async (req, res) => {
 
 // Webhook ka logic hum baad mein settle karenge jaise aapne kaha
 exports.handleWebhook = async (req, res) => {
-    console.log("📩 Webhook Received!");
+    console.log("📩 Cashfree Webhook Received!");
     try {
         const { data, type } = req.body;
 
-        // Check if payment is successful
         if (type === "PAYMENT_SUCCESS_WEBHOOK") {
-            const orderData = data.order;
-            const paymentData = data.payment;
-            const customerData = data.customer_details;
+            const amount = data.payment.payment_amount; // ₹1
+            const fullPhone = data.customer_details.customer_phone; // +917355052625
+            const transactionId = data.payment.cf_payment_id;
+            
+            // 🔟 Phone number ke aakhri 10 digits nikalo
+            const cleanPhone = fullPhone.replace(/\D/g, '').slice(-10); 
 
-            const amount = orderData.order_amount;
-            const orderId = orderData.order_id;
-            const transactionId = paymentData.cf_payment_id;
-            const customerPhone = customerData.customer_phone;
+            console.log(`Searching loan for phone: ${cleanPhone} with amount: ${amount}`);
 
-            console.log(`Processing Payment: ₹${amount} for Phone: ${customerPhone}`);
-
-            // --- 🔍 SMART SEARCH ---
-            // Pehle Order ID se dhundo, agar nahi mile (Form case) toh Phone se dhundo
-            let loan = await Loan.findOne({ 
+            // 🔍 SMART SEARCH: Phone ya LoanId se dhundo
+            const loan = await Loan.findOne({ 
                 $or: [
-                    { loanId: orderId.split('_').pop() }, // Custom Order ID logic
-                    { customerPhone: customerPhone }      // Form Payment logic
+                    { nomineeMobile: cleanPhone },
+                    { customerPhone: cleanPhone },
+                    { customerPhone: fullPhone }
                 ],
-                status: 'Active' 
+                // Status check ko thoda flexible rakho taaki update ho sake
+                status: { $in: ['Active', 'Disbursed'] } 
             });
 
             if (loan) {
-                // Yahan hum wahi settlement function call karenge jo pehle banaya tha
+                // Settlement function ko call karo
                 await settleEMIPayment({
                     order_amount: amount,
                     cf_payment_id: transactionId,
-                    order_id: orderId
+                    order_id: data.order.order_id
                 }, loan.loanId);
                 
-                console.log(`✅ Ledger Updated for ${loan.customerName}`);
+                console.log(`✅ Ledger Updated successfully for: ${loan.customerName}`);
             } else {
-                console.error("❌ Webhook Error: No Active Loan found for this customer.");
+                console.error(`❌ No loan found in DB for phone: ${cleanPhone}`);
             }
         }
-        
-        // Cashfree ko hamesha 200 OK bhejna zaroori hai
         res.status(200).send("OK");
     } catch (err) {
-        console.error("Webhook Processing Error:", err);
-        res.status(500).send("Internal Error");
+        console.error("Webhook Error:", err);
+        res.status(500).send("Internal Server Error");
     }
 };
