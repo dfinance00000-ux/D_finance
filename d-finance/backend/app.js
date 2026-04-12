@@ -11,7 +11,7 @@ app.set('trust proxy', 1);
 
 // --- 2. Optimized CORS ---
 app.use(cors({
-  origin: ["https://dfinance.space", "https://d-finance-backend.onrender.com/api"], // Sirf apne domains allow karein
+  origin: ["https://dfinance.space", "http://localhost:5173"], // Sirf apne domains allow karein
   methods: ["GET", "POST", "PUT", "DELETE"],
   credentials: true
 }));
