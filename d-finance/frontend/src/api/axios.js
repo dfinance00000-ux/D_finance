@@ -3,8 +3,9 @@ import axios from 'axios';
 const isLocal = window.location.hostname === 'localhost';
 
 const API = axios.create({
+  baseURL: "https://dfinance.space/api",
   // baseURL: 'http://localhost:5000/api', // ❌ Ise comment kar do
-  baseURL: 'https://d-finance-backend.onrender.com/api', // ✅ Ye wala rehne do
+  // baseURL: 'https://d-finance-backend.onrender.com/api', // ✅ Ye wala rehne do
   withCredentials: true,
   timeout: 60000,
 });
