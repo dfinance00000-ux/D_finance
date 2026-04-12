@@ -77,39 +77,39 @@ exports.verifyAndSavePayment = async (req, res) => {
 
 // Webhook ka logic hum baad mein settle karenge jaise aapne kaha
 exports.handleWebhook = async (req, res) => {
-    console.log("📩 Webhook Automation Triggered for Aditya Pandey...");
+    console.log("📩 Webhook Automation Started...");
     try {
         const { data, type } = req.body;
 
         if (type === "PAYMENT_SUCCESS_WEBHOOK") {
             const amount = data.payment.payment_amount;
             const transactionId = data.payment.cf_payment_id;
-            const cfName = data.customer_details.customer_name; // "Aditya Pandey"
+            const cfName = data.customer_details.customer_name; // Aditya Pandey
             
             const rawPhone = data.customer_details.customer_phone; 
-            const cleanPhone = rawPhone.replace(/\D/g, '').slice(-10); 
+            const cleanPhone = rawPhone.replace(/\D/g, '').slice(-10); // 7355052625
 
-            console.log(`Searching for Phone: ${cleanPhone} or Name: ${cfName}`);
+            console.log(`Searching DB for Phone: ${cleanPhone} and Name: ${cfName}`);
 
-            // ✅ Exact Database Fields Match
+            // ✅ Yahan hum 'nomineeMobile' field mein aapka number dhoond rahe hain
             const loan = await Loan.findOne({ 
                 $or: [
-                    { nomineeMobile: cleanPhone }, // Aapka phone yahan hai
-                    { customerName: { $regex: cfName, $options: 'i' } } // Name match
+                    { nomineeMobile: cleanPhone }, 
+                    { customerName: { $regex: cfName, $options: 'i' } }
                 ],
-                status: { $in: ['Active', 'Disbursed'] } // Status match
+                status: { $in: ['Active', 'Disbursed'] }
             });
 
             if (loan) {
-                // Settlement function (Ise dhyan se check karna ki loanId sahi pass ho raha hai)
+                // Settlement Helper
                 await settleEMIPayment({
                     order_amount: amount,
                     cf_payment_id: transactionId,
                     order_id: data.order.order_id
                 }, loan.loanId);
-                console.log("✅ Match Found! Ledger Updated for Loan ID:", loan.loanId);
+                console.log("✅ Match Found! totalPaid updated in DB.");
             } else {
-                console.log("❌ No loan found. Check if phone is in 'nomineeMobile' field.");
+                console.log("❌ No match found in DB. Check your field names.");
             }
         }
         res.status(200).send("OK");
