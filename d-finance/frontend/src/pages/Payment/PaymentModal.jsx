@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
 import API from '../../api/axios';
-import { load } from "@cashfreepayments/cashfree-js"; 
 import { FiX, FiShield, FiCreditCard, FiSmartphone } from 'react-icons/fi';
 
 const PaymentModal = ({ loan, customAmount, onClose, onRefresh }) => {
@@ -11,7 +10,7 @@ const PaymentModal = ({ loan, customAmount, onClose, onRefresh }) => {
   const user = JSON.parse(localStorage.getItem('user')) || {};
   const finalAmount = Number(customAmount) || Number(loan?.installmentAmount) || 0;
 
-  // --- 💳 ONLINE PAYMENT LOGIC (CASHFREE v3 SDK) ---
+  // --- 💳 ONLINE PAYMENT LOGIC (Using window.Cashfree to avoid build errors) ---
   const handleOnlinePayment = async () => {
     if (finalAmount <= 0) return alert("❌ Invalid Amount");
     setLoading(true);
@@ -27,32 +26,27 @@ const PaymentModal = ({ loan, customAmount, onClose, onRefresh }) => {
       });
 
       const sessionId = res.data.payment_session_id;
-      const orderId = res.data.order_id; // For verification backup
 
-      // 2. Cashfree SDK Initialize karo
-      const cashfree = await load({ mode: "production" }); 
+      // 2. Initialize SDK from window
+      if (!window.Cashfree) {
+        return alert("⚠️ Cashfree SDK not loaded. Please refresh page.");
+      }
+      
+      const cashfree = window.Cashfree({ mode: "production" });
 
-      // 3. Checkout Popup Modal kholo
+      // 3. Checkout Popup Modal
       let checkoutOptions = {
         paymentSessionId: sessionId,
         redirectTarget: "_modal", 
       };
 
-      cashfree.checkout(checkoutOptions).then(async (result) => {
-        if (result.error) {
-          console.error("Payment Error:", result.error);
-          alert(result.error.message);
-        }
-        
-        // --- 🔄 AUTO SETTLE LOGIC ---
-        // SDK window band hote hi dashboard refresh karo taaki Webhook ka data dikh jaye
-        console.log("Payment window closed, refreshing ledger...");
-        
-        // Thoda delay dete hain taaki backend webhook process kar sake
+      cashfree.checkout(checkoutOptions).then(() => {
+        // Window close hone par automatic refresh logic
+        console.log("Payment window closed, refreshing...");
         setTimeout(() => {
           onRefresh(); 
           onClose();
-        }, 1500);
+        }, 2000);
       });
 
     } catch (err) {
@@ -115,32 +109,31 @@ const PaymentModal = ({ loan, customAmount, onClose, onRefresh }) => {
             </button>
           </div>
 
-          {/* --- 💳 ONLINE SECTION --- */}
+          {/* --- 💳 ONLINE SECTION (CASHFREE OFFICIAL DESIGN) --- */}
           {payMode === 'online' ? (
             <div style={onlineSection} className="fade-in">
                 <p style={infoText}>Use our secure gateway for instant verification.</p>
                 
                 <div style={{ display: 'flex', justifyContent: 'center' }}>
-                  <button 
-                    onClick={handleOnlinePayment}
-                    disabled={loading}
-                    className="cf-official-btn"
-                  >
+                  {/* 🔥 OFFICIAL BLACK BUTTON INTEGRATED 🔥 */}
+                  <div className="cf-official-btn" onClick={!loading ? handleOnlinePayment : null}>
                     <div style={{ display: 'flex', alignItems: 'center' }}>
                       <img 
                         src="https://cashfreelogo.cashfree.com/cashfreepayments/logosvgs/Group_4355.svg" 
                         alt="logo" 
-                        style={{ width: '32px', height: '32px' }} 
+                        style={{ width: '38px', height: '38px' }} 
                       />
                     </div>
-                    <div style={btnTextWrapper}>
-                      <div style={btnMainText}>{loading ? "Initializing..." : "Pay with Cashfree"}</div>
-                      <div style={btnSubText}>
+                    <div className="btn-text-container">
+                      <div className="btn-main-text">
+                        {loading ? "Initializing..." : "Pay Now"}
+                      </div>
+                      <div className="btn-sub-text">
                         <span>Powered By Cashfree</span>
                         <img src="https://cashfreelogo.cashfree.com/cashfreepayments/logosvgs/Group_4355.svg" alt="logo" style={{ width: '12px', height: '12px', marginLeft: '4px' }} />
                       </div>
                     </div>
-                  </button>
+                  </div>
                 </div>
 
                 <p style={safeNote}>Cards, UPI, Netbanking Supported</p>
@@ -172,7 +165,7 @@ const PaymentModal = ({ loan, customAmount, onClose, onRefresh }) => {
   );
 };
 
-// --- STYLES (NO CHANGE) ---
+// --- STYLES ---
 const overlayStyle = { position: 'fixed', inset: 0, background: 'rgba(15, 23, 42, 0.95)', backdropFilter: 'blur(10px)', zIndex: 10000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '15px' };
 const modalCard = { background: '#fff', width: '100%', maxWidth: '400px', borderRadius: '40px', overflow: 'hidden' };
 const headerSection = { padding: '20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #f1f5f9' };
@@ -186,9 +179,6 @@ const tab = { flex: 1, padding: '12px', border: 'none', borderRadius: '12px', fo
 const activeTab = { ...tab, background: '#fff', color: '#0f172a', boxShadow: '0 4px 10px rgba(0,0,0,0.05)' };
 const onlineSection = { padding: '10px 0' };
 const infoText = { fontSize: '12px', color: '#64748b', marginBottom: '20px' };
-const btnTextWrapper = { display: 'flex', flexDirection: 'column', alignItems: 'flex-start', marginLeft: '12px' };
-const btnMainText = { color: '#fff', fontSize: '15px', fontWeight: '700' };
-const btnSubText = { color: '#94a3b8', fontSize: '9px', display: 'flex', alignItems: 'center' };
 const safeNote = { fontSize: '11px', color: '#10b981', marginTop: '15px', fontWeight: '700' };
 const manualSection = { display: 'flex', flexDirection: 'column', alignItems: 'center' };
 const qrWrapper = { padding: '12px', border: '2px dashed #e2e8f0', borderRadius: '25px', marginBottom: '20px' };
@@ -203,19 +193,44 @@ const animations = `
   .modal-animate { animation: modalIn 0.3s cubic-bezier(0.34, 1.56, 0.64, 1); }
   .fade-in { animation: fadeIn 0.4s ease-in; }
   @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+  
+  /* OFFICIAL BUTTON STYLES */
   .cf-official-btn {
     background: #000;
-    border: 1px solid #1e293b;
     border-radius: 15px;
     display: flex;
-    padding: 12px 25px;
+    padding: 10px 25px;
     width: fit-content;
     cursor: pointer;
     transition: 0.3s;
+    border: 1px solid black;
     align-items: center;
   }
-  .cf-official-btn:hover { background: #111; transform: translateY(-2px); }
-  .cf-official-btn:disabled { opacity: 0.6; cursor: not-allowed; }
+  .cf-official-btn:hover {
+    background: #111;
+    transform: translateY(-2px);
+  }
+  .btn-text-container {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    margin-left: 12px;
+    justify-content: center;
+  }
+  .btn-main-text {
+    font-family: 'Times New Roman', serif;
+    color: #fff;
+    margin-bottom: 2px;
+    font-size: 16px;
+    font-weight: 700;
+  }
+  .btn-sub-text {
+    font-family: 'Times New Roman', serif;
+    color: #fff;
+    font-size: 10px;
+    display: flex;
+    align-items: center;
+  }
 `;
 
 export default PaymentModal;
