@@ -7,20 +7,21 @@ const { protect } = require('../middlewares/authMiddleware');
 
 /**
  * 1. Create Order
- * User jab checkout shuru karega tab order generate hoga
+ * Frontend hit: POST /api/payments/create-order
  */
 router.post('/create-order', protect, paymentController.createOrder);
 
 /**
- * 2. Verify Payment
- * Payment ke turant baad frontend se verify karne ke liye
+ * 2. Verify Payment (Manual Verification Backup)
+ * Frontend hit: POST /api/payments/verify
  */
 router.post('/verify', protect, paymentController.verifyAndSavePayment);
 
 /**
  * 3. 🔥 WEBHOOK (Automation Heart)
- * Cashfree background mein ledger settle karne ke liye ise call karega.
- * 🚨 Note: Ispe auth middleware (protect) NAHI lagana hai.
+ * Cashfree hit: POST /api/payments/webhook
+ * 🚨 ALERT: Ispe 'protect' middleware kabhi mat lagana, 
+ * varna Cashfree login na hone ki wajah se 401 error dega.
  */
 router.post('/webhook', paymentController.handleWebhook);
 

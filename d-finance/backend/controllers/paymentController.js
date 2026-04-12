@@ -8,7 +8,7 @@ Cashfree.XClientId = "12575675075b22f889264cda78b7657521";
 Cashfree.XClientSecret = "cfsk_ma_prod_8e3ff1ae55940c09c2e4944c0d0ba0c6_13b34662";
 Cashfree.XEnvironment = Cashfree.Environment.PRODUCTION;
 
-// 1. CREATE ORDER (v3 SDK Compliant)
+// 1. CREATE ORDER
 exports.createOrder = async (req, res) => {
     console.log("📩 Create Order Request Received for Loan:", req.body.loanId);
     try {
@@ -35,8 +35,6 @@ exports.createOrder = async (req, res) => {
         };
 
         const response = await Cashfree.PGCreateOrder("2023-08-01", request);
-        
-        console.log("✅ Order Created:", response.data.order_id);
         res.status(200).json(response.data);
     } catch (err) {
         console.error("❌ Cashfree API Error:", err.response?.data || err.message);
@@ -47,7 +45,7 @@ exports.createOrder = async (req, res) => {
     }
 };
 
-// 2. VERIFY (Direct API Verification)
+// 2. VERIFY (Direct API Verification - Manual Refresh Backup)
 exports.verifyAndSavePayment = async (req, res) => {
     try {
         const { order_id } = req.body;
@@ -56,6 +54,7 @@ exports.verifyAndSavePayment = async (req, res) => {
 
         if (orderData.order_status === "PAID") {
             let loanId = order_id.includes('_') ? order_id.split('_').pop() : null;
+            // Transforming data to match helper expectations
             const result = await settleEMIPayment(orderData, loanId);
             return res.status(200).json(result);
         }
@@ -66,7 +65,7 @@ exports.verifyAndSavePayment = async (req, res) => {
     }
 };
 
-// 3. 🔥 WEBHOOK (The "Smart Accountant" for dfinance.space)
+// 3. 🔥 WEBHOOK (Automation Heart)
 exports.handleWebhook = async (req, res) => {
     console.log("📩 Webhook Received on dfinance.space!");
     try {
@@ -74,7 +73,6 @@ exports.handleWebhook = async (req, res) => {
         const timestamp = req.headers["x-webhook-timestamp"];
         const rawBody = req.rawBody || JSON.stringify(req.body);
 
-        // 🛡️ SECURITY: Signature Verification
         const secretKey = Cashfree.XClientSecret;
         const signedPayload = timestamp + rawBody;
         const expectedSignature = crypto.createHmac('sha256', secretKey)
@@ -87,22 +85,19 @@ exports.handleWebhook = async (req, res) => {
 
         const { data, type } = req.body;
 
-        // Handling multiple payment sources (Links, Forms, Buttons)
         if (type.includes("SUCCESS") || type === "PAYMENT_FORM_ORDER_WEBHOOK" || type === "PAYMENT_LINK_PAID") {
             
-            const orderData = data.order || data.payment_link;
+            const orderData = data.order || data.payment_link || {};
             const paymentData = data.payment || {};
             const status = orderData.order_status || paymentData.payment_status;
 
             if (status === "PAID" || status === "SUCCESS") {
-                const amount = orderData.order_amount || orderData.link_amount_paid;
+                const amount = orderData.order_amount || orderData.link_amount_paid || paymentData.payment_amount;
                 const transactionId = paymentData.cf_payment_id || orderData.transaction_id || orderData.order_id;
                 const orderId = orderData.order_id || orderData.link_id;
 
-                // Extraction logic for Loan ID
                 let extractedLoanId = orderId.includes('_') ? orderId.split('_').pop() : (orderData.link_purpose || null);
 
-                // Smart Search: Match by LoanId, Phone, or CustomerId
                 const loan = await Loan.findOne({ 
                     $or: [
                         { loanId: extractedLoanId },
@@ -113,6 +108,7 @@ exports.handleWebhook = async (req, res) => {
                 });
 
                 if (loan) {
+                    // Helper expecting single object containing amount and id
                     await settleEMIPayment({
                         order_amount: amount,
                         cf_payment_id: transactionId,
@@ -131,10 +127,11 @@ exports.handleWebhook = async (req, res) => {
 };
 
 // --- ⚙️ HELPER: Ledger Adjustment Logic ---
-async function settleEMIPayment(orderData, loanId) {
-    const transactionId = orderData.cf_payment_id || orderData.order_id;
+async function settleEMIPayment(paymentInfo, loanId) {
+    const transactionId = paymentInfo.cf_payment_id || paymentInfo.order_id;
+    const amountPaid = paymentInfo.order_amount || paymentInfo.payment_amount;
     
-    // 1. Duplicate Check (Idempotency)
+    // 1. Duplicate Check
     const existing = await Payment.findOne({ transactionId });
     if (existing) {
         console.log("⚠️ Payment already processed:", transactionId);
@@ -150,7 +147,7 @@ async function settleEMIPayment(orderData, loanId) {
       loanId: loan.loanId,
       customerId: loan.customerId,
       customerName: loan.customerName,
-      amount: orderData.order_amount,
+      amount: amountPaid,
       transactionId: transactionId,
       date: new Date(),
       status: "Approved", 
@@ -158,7 +155,7 @@ async function settleEMIPayment(orderData, loanId) {
     });
     await newPayment.save();
 
-    // 4. Update Loan Ledger (Auto-update pending & next EMI date)
+    // 4. Update Loan Ledger
     let daysToAdd = (loan.emiType === 'Weekly EMI' || loan.type === 'Weekly EMI') ? 7 : 1;
     
     await Loan.findOneAndUpdate(
@@ -166,13 +163,13 @@ async function settleEMIPayment(orderData, loanId) {
       { 
         $set: { nextEmiDate: new Date(Date.now() + daysToAdd * 24 * 60 * 60 * 1000) },
         $inc: { 
-            totalPaid: orderData.order_amount, 
+            totalPaid: amountPaid, 
             paidInstallments: 1,
-            totalPending: -orderData.order_amount 
+            totalPending: -amountPaid 
         }
       }
     );
 
-    console.log(`✅ Automated Settlement Done for ${loan.customerName}. ₹${orderData.order_amount} Adjusted.`);
+    console.log(`✅ Automated Settlement Done for ${loan.customerName}. ₹${amountPaid} Adjusted.`);
     return { success: true };
 }

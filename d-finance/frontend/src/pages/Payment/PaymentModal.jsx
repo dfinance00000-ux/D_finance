@@ -10,13 +10,13 @@ const PaymentModal = ({ loan, customAmount, onClose, onRefresh }) => {
   const user = JSON.parse(localStorage.getItem('user')) || {};
   const finalAmount = Number(customAmount) || Number(loan?.installmentAmount) || 0;
 
-  // --- 💳 ONLINE PAYMENT LOGIC (Using window.Cashfree to avoid build errors) ---
+  // --- 💳 ONLINE PAYMENT LOGIC ---
   const handleOnlinePayment = async () => {
     if (finalAmount <= 0) return alert("❌ Invalid Amount");
     setLoading(true);
 
     try {
-      // 1. Backend se Session ID mangwao
+      // 1. Backend se Session ID mangwao (Using relative path as per Axios BaseURL update)
       const res = await API.post('/payments/create-order', {
         amount: finalAmount,
         customerId: user.id || user._id,
@@ -27,12 +27,16 @@ const PaymentModal = ({ loan, customAmount, onClose, onRefresh }) => {
 
       const sessionId = res.data.payment_session_id;
 
+      if (!sessionId) {
+        throw new Error("Payment session ID not found");
+      }
+
       // 2. Initialize SDK from window
       if (!window.Cashfree) {
-        return alert("⚠️ Cashfree SDK not loaded. Please refresh page.");
+        return alert("⚠️ Cashfree SDK not loaded. Please refresh the page.");
       }
       
-      const cashfree = window.Cashfree({ mode: "production" });
+      const cashfree = window.Cashfree({ mode: "production" }); // Set to sandbox if testing
 
       // 3. Checkout Popup Modal
       let checkoutOptions = {
@@ -41,8 +45,8 @@ const PaymentModal = ({ loan, customAmount, onClose, onRefresh }) => {
       };
 
       cashfree.checkout(checkoutOptions).then(() => {
-        // Window close hone par automatic refresh logic
-        console.log("Payment window closed, refreshing...");
+        console.log("Payment window closed, refreshing dashboard...");
+        // Delay taaki webhook background mein ledger update kar sake
         setTimeout(() => {
           onRefresh(); 
           onClose();
@@ -51,7 +55,8 @@ const PaymentModal = ({ loan, customAmount, onClose, onRefresh }) => {
 
     } catch (err) {
       console.error("Initiation Error:", err);
-      alert("❌ Payment start nahi ho payi. Backend check karein.");
+      const errorMsg = err.response?.data?.details || "Backend check karein.";
+      alert(`❌ Payment start nahi ho payi: ${errorMsg}`);
     } finally {
       setLoading(false);
     }
@@ -72,7 +77,7 @@ const PaymentModal = ({ loan, customAmount, onClose, onRefresh }) => {
       onRefresh();
       onClose();
     } catch (err) {
-      alert("❌ Submission failed.");
+      alert("❌ Submission failed. Please try again.");
     } finally {
       setLoading(false);
     }
@@ -83,7 +88,7 @@ const PaymentModal = ({ loan, customAmount, onClose, onRefresh }) => {
       <style>{animations}</style>
       <div style={modalCard} className="modal-animate">
         
-        {/* Header */}
+        {/* Header Section */}
         <div style={headerSection}>
           <div style={shieldBadge}><FiShield size={12} /> SECURE GATEWAY</div>
           <button onClick={onClose} style={closeBtn}><FiX /></button>
@@ -109,13 +114,12 @@ const PaymentModal = ({ loan, customAmount, onClose, onRefresh }) => {
             </button>
           </div>
 
-          {/* --- 💳 ONLINE SECTION (CASHFREE OFFICIAL DESIGN) --- */}
+          {/* --- 💳 ONLINE SECTION --- */}
           {payMode === 'online' ? (
             <div style={onlineSection} className="fade-in">
                 <p style={infoText}>Use our secure gateway for instant verification.</p>
                 
                 <div style={{ display: 'flex', justifyContent: 'center' }}>
-                  {/* 🔥 OFFICIAL BLACK BUTTON INTEGRATED 🔥 */}
                   <div className="cf-official-btn" onClick={!loading ? handleOnlinePayment : null}>
                     <div style={{ display: 'flex', alignItems: 'center' }}>
                       <img 
@@ -126,7 +130,7 @@ const PaymentModal = ({ loan, customAmount, onClose, onRefresh }) => {
                     </div>
                     <div className="btn-text-container">
                       <div className="btn-main-text">
-                        {loading ? "Initializing..." : "Pay Now"}
+                        {loading ? "Processing..." : "Pay Now"}
                       </div>
                       <div className="btn-sub-text">
                         <span>Powered By Cashfree</span>
@@ -194,7 +198,6 @@ const animations = `
   .fade-in { animation: fadeIn 0.4s ease-in; }
   @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
   
-  /* OFFICIAL BUTTON STYLES */
   .cf-official-btn {
     background: #000;
     border-radius: 15px;
