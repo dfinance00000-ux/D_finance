@@ -10,31 +10,40 @@ Cashfree.XEnvironment = Cashfree.Environment.PRODUCTION;
 
 // 1. CREATE ORDER (v3 SDK Compliant)
 exports.createOrder = async (req, res) => {
+    console.log("📩 Create Order Request Received for Loan:", req.body.loanId);
     try {
         const { amount, customerId, customerName, customerPhone, loanId } = req.body;
 
+        if (!amount || !loanId) {
+            return res.status(400).json({ error: "Amount and Loan ID are required" });
+        }
+
         const request = {
-            order_amount: amount,
+            order_amount: parseFloat(amount).toFixed(2),
             order_currency: "INR",
             order_id: `ORD_${Date.now()}_${loanId}`,
             customer_details: {
-                customer_id: customerId,
-                customer_name: customerName,
-                customer_email: "support@dfinance.space", // Domain updated
+                customer_id: String(customerId),
+                customer_name: customerName || "Customer",
+                customer_email: "support@dfinance.space",
                 customer_phone: customerPhone || "9999999999",
             },
             order_meta: {
-                // Aapke naye domain ka return URL
                 return_url: `https://dfinance.space/customer/tracking?order_id={order_id}`,
             },
             order_note: `EMI Repayment for Loan: ${loanId}`
         };
 
         const response = await Cashfree.PGCreateOrder("2023-08-01", request);
+        
+        console.log("✅ Order Created:", response.data.order_id);
         res.status(200).json(response.data);
     } catch (err) {
-        console.error("Cashfree Order Error:", err.response?.data || err.message);
-        res.status(500).json({ error: "Could not initialize Cashfree order" });
+        console.error("❌ Cashfree API Error:", err.response?.data || err.message);
+        res.status(500).json({ 
+            error: "Failed to initialize order", 
+            details: err.response?.data?.message || err.message 
+        });
     }
 };
 
