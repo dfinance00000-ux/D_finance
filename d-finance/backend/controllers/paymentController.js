@@ -77,47 +77,48 @@ exports.verifyAndSavePayment = async (req, res) => {
 
 // Webhook ka logic hum baad mein settle karenge jaise aapne kaha
 exports.handleWebhook = async (req, res) => {
-    console.log("📩 Cashfree Webhook Received!");
     try {
         const { data, type } = req.body;
 
         if (type === "PAYMENT_SUCCESS_WEBHOOK") {
-            const amount = data.payment.payment_amount; // ₹1
-            const fullPhone = data.customer_details.customer_phone; // +917355052625
+            const amount = data.payment.payment_amount;
             const transactionId = data.payment.cf_payment_id;
             
-            // 🔟 Phone number ke aakhri 10 digits nikalo
-            const cleanPhone = fullPhone.replace(/\D/g, '').slice(-10); 
+            // 1. Phone number ko saaf karo (Sirf numbers rakho aur aakhri 10 uthao)
+            const rawPhone = data.customer_details.customer_phone; 
+            const cleanPhone = rawPhone.replace(/\D/g, '').slice(-10); 
 
-            console.log(`Searching loan for phone: ${cleanPhone} with amount: ${amount}`);
+            console.log("Searching for phone:", cleanPhone);
 
-            // 🔍 SMART SEARCH: Phone ya LoanId se dhundo
+            // 2. Database mein dhoondo (Flexible search)
+            // Hum dhoond rahe hain ki kya cleanPhone nomineeMobile ya customerPhone field mein hai
             const loan = await Loan.findOne({ 
-                $or: [
-                    { nomineeMobile: cleanPhone },
-                    { customerPhone: cleanPhone },
-                    { customerPhone: fullPhone }
-                ],
-                // Status check ko thoda flexible rakho taaki update ho sake
-                status: { $in: ['Active', 'Disbursed'] } 
+                $and: [
+                    {
+                        $or: [
+                            { nomineeMobile: cleanPhone },
+                            { customerPhone: cleanPhone }
+                        ]
+                    },
+                    { status: { $in: ['Active', 'Disbursed'] } }
+                ]
             });
 
             if (loan) {
-                // Settlement function ko call karo
+                // 3. Agar loan mil gaya, toh ledger update karo
                 await settleEMIPayment({
                     order_amount: amount,
                     cf_payment_id: transactionId,
                     order_id: data.order.order_id
                 }, loan.loanId);
-                
-                console.log(`✅ Ledger Updated successfully for: ${loan.customerName}`);
+                console.log("✅ Match found! Ledger updated for Loan ID:", loan.loanId);
             } else {
-                console.error(`❌ No loan found in DB for phone: ${cleanPhone}`);
+                console.log("❌ No match found for phone:", cleanPhone);
             }
         }
         res.status(200).send("OK");
     } catch (err) {
         console.error("Webhook Error:", err);
-        res.status(500).send("Internal Server Error");
+        res.status(500).send("Internal Error");
     }
 };
