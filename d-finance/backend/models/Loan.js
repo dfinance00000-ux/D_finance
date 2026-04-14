@@ -16,12 +16,16 @@ const LoanSchema = new mongoose.Schema({
     type: String, 
     required: [true, "Customer Name is required"] 
   },
+  customerMobile: { // 🆕 Added to fix "Not Provided" on Accountant side
+    type: String 
+  },
   
-  // --- 🧑‍💼 Field Officer Logic ---
+  // --- 🧑‍💼 Field Officer & Advisor Logic ---
   fieldOfficerId: { 
     type: mongoose.Schema.Types.Mixed, 
     default: null 
   },
+  advisorId: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
   fieldOfficerName: { type: String },
   verifiedByName: { type: String }, 
   isAssigned: { 
@@ -39,17 +43,11 @@ const LoanSchema = new mongoose.Schema({
   tenureMonths: { type: Number, required: [true, "Tenure is required"] }, 
   totalWeeks: { type: Number }, 
   totalDays: { type: Number },
-  
-  // Frontend sends 'emiType' (Daily EMI / Weekly EMI)
   emiType: { type: String }, 
-  
-  // Frontend sends 'installmentAmount'
   installmentAmount: { type: Number },
   totalInstallments: { type: Number },
-
-  weeklyEMI: { type: Number }, // Fallback for older code
-  dailyEMI: { type: Number },  // Fallback for older code
-  
+  weeklyEMI: { type: Number }, 
+  dailyEMI: { type: Number },  
   totalPayable: { type: Number, required: [true, "Total Payable amount is required"] }, 
   
   // --- 🏦 BANK DETAILS ---
@@ -60,43 +58,57 @@ const LoanSchema = new mongoose.Schema({
   ifscCode: { type: String },
   lastTransactionDate: { type: String },
 
-  // --- 📸 KYC DOCUMENTS ---
+  // --- 📸 CUSTOMER KYC DOCUMENTS (Officer Captured) ---
+  custLivePhoto: { type: String }, // 🆕 Customer Live Photo
+  custAadhaarFront: { type: String },
+  custAadhaarBack: { type: String },
+  custVoterFront: { type: String },
+  custVoterBack: { type: String },
+  custPAN: { type: String },
+  custSignature: { type: String },
+  secondaryIdFront: { type: String }, // 🆕 For Secondary ID verification
+  secondaryIdBack: { type: String },  // 🆕 Fixed "Missing" on Accountant side
   passbookPic: { type: String },
-  aadhaarFront: { type: String },
-  aadhaarBack: { type: String },
-  secondaryIdFront: { type: String },
-  secondaryIdBack: { type: String },
-  nomineePic: { type: String },
 
   // --- 👤 NOMINEE DETAILS ---
   nomineeName: { type: String },
   nomineeRelation: { type: String },
   nomineeDOB: { type: String },
+  nomineeAge: { type: String },
   nomineeMobile: { type: String },
   nomineeAddress: { type: String },
   nomineeGender: { type: String },
-  nomineeCategory: { type: String }, // Added to match LUC form
+  nomineeCategory: { type: String },
+  nomineePic: { type: String },
 
-  // --- 🏠 FIELD AUDIT DETAILS ---
-  religion: { type: String },
-  category: { type: String },
-  houseType: { type: String },
-  areaType: { type: String }, // Added (Rural/Urban)
+  // --- 🏠 FIELD AUDIT & HOUSEHOLD DETAILS ---
+  religion: { type: String, default: 'HINDU' },
+  category: { type: String, default: 'GENERAL' },
+  houseType: { type: String }, // CONCRETE, KUTCHA, etc.
+  areaType: { type: String },  // RURAL, URBAN, etc.
+  residenceNature: { type: String }, // Owned, Rented
+  yearsAtCurrentAddress: { type: String },
+  totalFamilyMembers: { type: String },
+  earningMembers: { type: String },
+  
+  // --- 💼 OCCUPATION & ECONOMY ---
+  memberOccupation: { type: String },
+  subOccupation: { type: String },
+  incomeActivity: { type: String },
+  familyIncomeActivities: { type: String },
   monthlyIncome: { type: String },
+  familyExpenditure: { type: String },
+  anyExistingLoan: { type: String }, 
+  financialInclusion: { type: [String], default: [] }, 
+
+  // --- 📍 SYSTEM & LOCATION ---
+  locationName: { type: String }, 
   inspectionDate: { type: Date },
 
   // --- 📂 Categorization ---
   type: { 
     type: String, 
-    // 🔥 UPDATED ENUM: Added Daily EMI and Weekly EMI to fix your error
-    enum: [
-      'Personal Loan', 
-      'JLG Loan', 
-      'Agriculture Loan', 
-      'Business Loan', 
-      'Daily EMI', 
-      'Weekly EMI'
-    ],
+    enum: ['Personal Loan', 'JLG Loan', 'Agriculture Loan', 'Business Loan', 'Daily EMI', 'Weekly EMI'],
     default: 'JLG Loan'
   },
   
@@ -110,27 +122,19 @@ const LoanSchema = new mongoose.Schema({
   status: { 
     type: String, 
     enum: [
-      'Pending',
-      'Applied',
-      'Hold - Pending Assignment', 
-      'Pending Verification', 
-      'Verification Pending', 
-      'Field Verified', 
-      'Approved', 
-      'Disbursed', 
-      'Rejected', 
-      'Closed'
+      'Pending', 'Applied', 'Hold - Pending Assignment', 
+      'Pending Verification', 'Verification Pending', 
+      'Field Verified', 'Approved', 'Disbursed', 'Rejected', 'Closed'
     ], 
     default: 'Verification Pending' 
   },
 
   // --- 💳 Repayment Tracking ---
   totalPaid: { type: Number, default: 0 },
-  paidInstallments: { type: Number, default: 0 }, // For tracking schedule
+  paidInstallments: { type: Number, default: 0 }, 
   totalPending: { type: Number }, 
   nextEmiDate: Date,
   
-  // 🔥 Internal History Tracking
   repaymentHistory: [
     {
       amount: Number,

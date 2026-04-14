@@ -1,26 +1,99 @@
 const Loan = require('../models/Loan');
 
-// Advisor jab verification submit karega
+// Advisor jab Field Verification & KYC submit karega
 exports.verifyField = async (req, res) => {
-  try {
-    const { loanId, religion, category, houseType, monthlyIncome, observation } = req.body;
+    try {
+        // 1. Saara data req.body se nikalna (Jo AdvisorVerification.jsx bhej raha hai)
+        const { 
+            loanId, 
+            religion, 
+            category, 
+            houseType, 
+            areaType,
+            residenceNature,
+            monthlyIncome, 
+            familyExpenditure,
+            memberOccupation,
+            incomeActivity,
+            yearsAtCurrentAddress,
+            // Nominee Details
+            nomineeName,
+            nomineeMobile,
+            nomineeUID,
+            nomineeRelation,
+            nomineeAge,
+            nomineePic,
+            // KYC Documents (Base64 Strings)
+            custLivePhoto,
+            aadhaarFront,
+            aadhaarBack,
+            secondaryIdFront,
+            secondaryIdBack,
+            memberSignature,
+            // System Fields
+            locationName,
+            verifiedByName,
+            advisorId
+        } = req.body;
 
-    const updatedLoan = await Loan.findOneAndUpdate(
-      { loanId: loanId },
-      { 
-        status: 'Field Verified', // Status change taaki Accountant ko dikhe
-        religion,
-        category,
-        houseType,
-        monthlyIncome,
-        accountantComments: observation, // Advisor ka comment
-        inspectionDate: new Date()
-      },
-      { new: true }
-    );
+        // 2. Database mein loan find karke update karna
+        const updatedLoan = await Loan.findOneAndUpdate(
+            { loanId: loanId }, // Loan ID se search
+            { 
+                $set: {
+                    status: 'Field Verified', // Status change taaki Accountant ko dikhe
+                    religion,
+                    category,
+                    houseType,
+                    areaType,
+                    residenceNature,
+                    monthlyIncome,
+                    familyExpenditure,
+                    memberOccupation,
+                    incomeActivity,
+                    yearsAtCurrentAddress,
+                    // Nominee Data Save
+                    nomineeName,
+                    nomineeMobile,
+                    nomineeUID,
+                    nomineeRelation,
+                    nomineeAge,
+                    nomineePic,
+                    // KYC Data Save
+                    custLivePhoto,
+                    aadhaarFront,
+                    aadhaarBack,
+                    secondaryIdFront,
+                    secondaryIdBack,
+                    memberSignature,
+                    // Inspection Info
+                    locationName,
+                    verifiedByName,
+                    advisorId: advisorId || req.user.id, // Advisor ki ID attach karna
+                    inspectionDate: new Date()
+                }
+            },
+            { new: true, runValidators: true } // New data return karega
+        );
 
-    res.status(200).json({ message: "Field Verification Successful!", data: updatedLoan });
-  } catch (err) {
-    res.status(500).json({ error: "Verification Failed", details: err.message });
-  }
+        if (!updatedLoan) {
+            return res.status(404).json({ success: false, error: "Loan Record Not Found!" });
+        }
+
+        console.log(`✅ Loan ${loanId} verified by ${verifiedByName}`);
+
+        res.status(200).json({ 
+            success: true,
+            message: "Field Verification & KYC Sync Successful!", 
+            data: updatedLoan 
+        });
+
+    } catch (err) {
+        console.error("❌ Verification Error:", err);
+        res.status(500).json({ 
+            success: false,
+            error: "Verification Sync Failed", 
+            details: err.message 
+        });
+    }
 };
