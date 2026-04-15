@@ -6,31 +6,23 @@ const { protect } = require('../middlewares/authMiddleware');
 // --- 💳 PAYMENT ROUTES (D-FINANCE BACKEND) ---
 
 /**
- * 1. Create Order (Online Payment Initiation)
+ * 1. Create Order
  * Frontend hit: POST /api/payments/create-order
- * Isse Cashfree ka payment_session_id milega.
  */
 router.post('/create-order', protect, paymentController.createOrder);
 
 /**
- * 2. Verify Payment (Direct API Check)
+ * 2. Verify Payment (Manual Verification Backup)
  * Frontend hit: POST /api/payments/verify
- * Payment khatam hone ke baad ledger refresh karne ke liye.
  */
 router.post('/verify', protect, paymentController.verifyAndSavePayment);
 
 /**
- * 3. 🔥 WEBHOOK (Automation)
+ * 3. 🔥 WEBHOOK (Automation Heart)
  * Cashfree hit: POST /api/payments/webhook
- * 🚨 ALERT: Ispe 'protect' NAHI lagana hai.
+ * 🚨 ALERT: Ispe 'protect' middleware kabhi mat lagana, 
+ * varna Cashfree login na hone ki wajah se 401 error dega.
  */
 router.post('/webhook', paymentController.handleWebhook);
-
-/**
- * 4. Manual Payment Submission (UTR Submission)
- * Agar user QR scan karke UTR dalta hai.
- */
-// Agar aapka manual logic alag controller mein hai toh wahan se import karein
-// router.post('/pay-manual', protect, paymentController.submitManualUTR);
 
 module.exports = router;

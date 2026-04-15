@@ -1,12 +1,12 @@
 const mongoose = require('mongoose');
 
 const PaymentSchema = new mongoose.Schema({
-  // 🔥 Har payment ka unique track rakhne ke liye
+  // 🔥 Unique Tracking ID (Humesha auto-generate hoga)
   paymentId: { 
     type: String, 
     unique: true, 
     required: true,
-    default: () => "PAY-" + Math.floor(100000 + Math.random() * 900000) // Auto-generate if not provided
+    default: () => "PAY-" + Date.now() + Math.floor(1000 + Math.random() * 9000)
   },
 
   // --- 🔗 Linking ---
@@ -29,11 +29,21 @@ const PaymentSchema = new mongoose.Schema({
     type: Number, 
     required: true 
   },
+  
+  // 🛠️ FIX: UTR ko optional kiya aur uniqueness hatayi taaki testing error na aaye
   utr: { 
     type: String, 
-    required: true, 
-    unique: true, // Ek UTR do baar use nahi ho sakta
-    trim: true 
+    required: false, // Ab ye zaroori nahi hai agar screenshot hai toh
+    trim: true,
+    default: "N/A"
+  },
+
+  // --- 📸 Evidence ---
+  // 🛠️ FIX: Screenshot field ab flexible hai
+  screenshot: { 
+    type: String, // Base64 Receipt String
+    required: false,
+    default: ""
   },
 
   // --- 🚦 Status & Verification ---
@@ -43,12 +53,7 @@ const PaymentSchema = new mongoose.Schema({
     default: 'Pending' 
   },
 
-  // --- 📸 Evidence ---
-  screenshot: { 
-    type: String // Base64 Receipt
-  },
-
-  // --- 🗓️ Timing ---
+  // --- 🗓️ Timing & Audit ---
   paymentDate: { 
     type: Date, 
     default: Date.now 
@@ -57,11 +62,21 @@ const PaymentSchema = new mongoose.Schema({
     type: Date 
   },
   verifiedBy: { 
-    type: String // Admin Name
+    type: String // Admin/Accountant Name
+  },
+  
+  // Extra Info: Kis raste se payment aayi
+  paymentMethod: {
+    type: String,
+    enum: ['Online', 'Manual QR', 'Cash'],
+    default: 'Manual QR'
   }
 }, { 
   timestamps: true 
 });
 
-// Purane indexes delete karne ke liye aur naye model ko export karne ke liye
+// Optimization: Taki Accountant ko pending list turant mile
+PaymentSchema.index({ status: 1, createdAt: -1 });
+
+// Export Logic
 module.exports = mongoose.models.Payment || mongoose.model('Payment', PaymentSchema);

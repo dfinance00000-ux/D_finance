@@ -102,13 +102,22 @@ app.post('/api/auth/login', async (req, res) => {
 
 app.post('/api/loans/pay-manual/:loanId', async (req, res) => {
   try {
-    const { utr, amount, customerId } = req.body;
+    // 🚨 FIX 1: 'screenshot' ko req.body se nikalna zaroori hai
+    const { utr, amount, customerId, screenshot, customerName } = req.body;
     const loanIdParam = req.params.loanId;
 
-    // 1. Double check for Duplicate UTR (To prevent double submission by user)
-    const existingPayment = await Payment.findOne({ utr: utr.trim() });
-    if (existingPayment) {
-      return res.status(400).json({ error: "Ye UTR pehle hi use ho chuka hai!" });
+    // 🔍 DEBUG: VS Code terminal mein length check karo
+    console.log("-----------------------------------------");
+    console.log(`📩 New Payment Request for: ${loanIdParam}`);
+    console.log(`📸 Image received: ${screenshot ? (screenshot.length / 1024).toFixed(2) + " KB" : "EMPTY (0)"}`);
+    console.log("-----------------------------------------");
+
+    // 1. Double check for Duplicate UTR
+    if (utr && utr !== "CASHFREE_PAY") {
+        const existingPayment = await Payment.findOne({ utr: utr.trim() });
+        if (existingPayment) {
+          return res.status(400).json({ error: "Ye UTR pehle hi use ho chuka hai!" });
+        }
     }
 
     // 2. Loan check
@@ -117,12 +126,13 @@ app.post('/api/loans/pay-manual/:loanId', async (req, res) => {
 
     // 3. Create NEW Unique Payment Record
     const newPayment = new Payment({
-      paymentId: "PAY-" + Date.now() + Math.floor(Math.random() * 1000), // Purely unique ID
+      paymentId: "PAY-" + Date.now() + Math.floor(Math.random() * 1000),
       loanId: loanIdParam,
-      customerId: loan.customerId,
-      customerName: loan.customerName,
+      customerId: loan.customerId || customerId,
+      customerName: loan.customerName || customerName,
       amount: Number(amount),
-      utr: utr.trim(),
+      utr: utr ? utr.trim() : "N/A",
+      screenshot: screenshot || "", // 🔥 Ab ye successfully save hoga
       status: 'Pending'
     });
 
@@ -135,7 +145,7 @@ app.post('/api/loans/pay-manual/:loanId', async (req, res) => {
         $push: { 
           repaymentHistory: { 
             amount: Number(amount), 
-            utr: utr.trim(), 
+            utr: utr ? utr.trim() : "N/A", 
             status: 'Pending',
             date: new Date() 
           } 
@@ -143,7 +153,7 @@ app.post('/api/loans/pay-manual/:loanId', async (req, res) => {
       }
     );
 
-    res.status(200).json({ success: true, message: "Payment logged!" });
+    res.status(200).json({ success: true, message: "Payment logged with screenshot!" });
   } catch (err) {
     console.error("❌ Save Error:", err.message);
     res.status(500).json({ error: "Server Error: " + err.message });

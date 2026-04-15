@@ -1,120 +1,111 @@
-// controllers/paymentController.js
-const { Cashfree } = require('cashfree-pg');
+const Payment = require('../models/Payment'); // Payment model import check kar lena
+const Loan = require('../models/Loan');
 
-// 🛡️ Pro-tip: Future mein in credentials ko .env file mein move kar dena
-Cashfree.XClientId = "12575675075b22f889264cda78b7657521";
-Cashfree.XClientSecret = "cfsk_ma_prod_8e3ff1ae55940c09c2e4944c0d0ba0c6_13b34662";
-Cashfree.XEnvironment = Cashfree.Environment.PRODUCTION;
-
-/**
- * 💳 Create Order
- * Frontend se aane wali request ko Cashfree ke pass bhejta hai
- */
-exports.createOrder = async (req, res) => {
-    // Debugging ke liye log zaroori hai Render dashboard par
-    console.log("📩 Request Data:", req.body);
-
+// --- CUSTOMER PAYMENT SUBMISSION ---
+exports.payManual = async (req, res) => {
     try {
-        const { amount, customerId, customerName, customerPhone, loanId } = req.body;
+        const { loanId } = req.params;
+        const { 
+            utr, 
+            amount, 
+            customerId, 
+            customerName, 
+            screenshot, // 🔥 Frontend se base64 image yahan aayegi
+            paymentType 
+        } = req.body;
 
-        // 1. Double check missing fields
-        if (!amount || !loanId || !customerId) {
+        // 1. Check if UTR already exists (Duplicate payment check)
+        const existingPay = await Payment.findOne({ utr });
+        if (existingPay && utr !== "CASHFREE_PAY") {
             return res.status(400).json({ 
-                message: "Validation Failed: amount, customerId, and loanId are required." 
+                success: false, 
+                error: "This UTR/Transaction ID has already been submitted!" 
             });
         }
 
-        // 2. Format Request according to Cashfree PG v3
-        const request = {
-            order_amount: parseFloat(amount).toFixed(2), // Cashfree strictly needs 2 decimal places as string
-            order_currency: "INR",
-            order_id: `ORD_${Date.now()}_${loanId}`, // Unique ID with Loan Reference
-            customer_details: {
-                customer_id: String(customerId),
-                customer_name: customerName || "Customer",
-                customer_email: "support@dfinance.space", // Default support email
-                customer_phone: customerPhone || "9999999999",
-            },
-            order_meta: {
-                // Payment window close hone ke baad redirect destination
-                return_url: `https://dfinance.space/dashboard`, 
-            },
-            order_note: `EMI Payment for Loan ID: ${loanId}`
-        };
+        // 2. Create New Payment Record
+        const newPayment = new Payment({
+            paymentId: "PAY-" + Date.now(), // Unique ID logic
+            loanId: loanId,
+            customerId: customerId,
+            customerName: customerName,
+            amount: Number(amount),
+            utr: utr,
+            screenshot: screenshot, // 🔥 Is line se image save hogi DB mein
+            status: 'Pending',
+            paymentDate: new Date()
+        });
 
-        // 3. Call Official Cashfree SDK
-        const response = await Cashfree.PGCreateOrder("2023-08-01", request);
-        
-        console.log("✅ Cashfree Order Generated:", response.data.order_id);
-        
-        // 4. Send the session data to frontend
-        res.status(200).json(response.data);
+        await newPayment.save();
+
+        console.log(`✅ Receipt for ${amount} received from ${customerName} (Loan: ${loanId})`);
+
+        res.status(200).json({ 
+            success: true, 
+            message: "Payment receipt submitted successfully! Admin will verify soon." 
+        });
 
     } catch (err) {
-        // Detailed error logging taaki humein pata chale API fail kyu hui
-        const errorBody = err.response?.data || err.message;
-        console.error("❌ Cashfree API Error Details:", errorBody);
-        
-        res.status(err.response?.status || 500).json({
-            message: "Failed to create payment order",
-            details: errorBody
+        console.error("❌ Payment Error:", err);
+        res.status(500).json({ 
+            success: false, 
+            error: "Failed to submit receipt", 
+            details: err.message 
         });
     }
-};
+};const Payment = require('../models/Payment'); // Payment model import check kar lena
+const Loan = require('../models/Loan');
 
-/**
- * 🔍 Basic Verify (Optional: For manual refresh checks)
- */
-exports.verifyAndSavePayment = async (req, res) => {
+// --- CUSTOMER PAYMENT SUBMISSION ---
+exports.payManual = async (req, res) => {
     try {
-        const { order_id } = req.body;
-        const response = await Cashfree.PGFetchOrder("2023-08-01", order_id);
-        res.status(200).json(response.data);
-    } catch (err) {
-        res.status(500).json({ error: "Verification failed" });
-    }
-};
+        const { loanId } = req.params;
+        const { 
+            utr, 
+            amount, 
+            customerId, 
+            customerName, 
+            screenshot, // 🔥 Frontend se base64 image yahan aayegi
+            paymentType 
+        } = req.body;
 
-// Webhook ka logic hum baad mein settle karenge jaise aapne kaha
-exports.handleWebhook = async (req, res) => {
-    console.log("📩 Webhook Automation Triggered for Aditya Pandey...");
-    try {
-        const { data, type } = req.body;
-
-        if (type === "PAYMENT_SUCCESS_WEBHOOK") {
-            const amount = data.payment.payment_amount;
-            const transactionId = data.payment.cf_payment_id;
-            const cfName = data.customer_details.customer_name; // "Aditya Pandey"
-            
-            const rawPhone = data.customer_details.customer_phone; 
-            const cleanPhone = rawPhone.replace(/\D/g, '').slice(-10); 
-
-            console.log(`Searching for Phone: ${cleanPhone} or Name: ${cfName}`);
-
-            // ✅ Exact Database Fields Match
-            const loan = await Loan.findOne({ 
-                $or: [
-                    { nomineeMobile: cleanPhone }, // Aapka phone yahan hai
-                    { customerName: { $regex: cfName, $options: 'i' } } // Name match
-                ],
-                status: { $in: ['Active', 'Disbursed'] } // Status match
+        // 1. Check if UTR already exists (Duplicate payment check)
+        const existingPay = await Payment.findOne({ utr });
+        if (existingPay && utr !== "CASHFREE_PAY") {
+            return res.status(400).json({ 
+                success: false, 
+                error: "This UTR/Transaction ID has already been submitted!" 
             });
-
-            if (loan) {
-                // Settlement function (Ise dhyan se check karna ki loanId sahi pass ho raha hai)
-                await settleEMIPayment({
-                    order_amount: amount,
-                    cf_payment_id: transactionId,
-                    order_id: data.order.order_id
-                }, loan.loanId);
-                console.log("✅ Match Found! Ledger Updated for Loan ID:", loan.loanId);
-            } else {
-                console.log("❌ No loan found. Check if phone is in 'nomineeMobile' field.");
-            }
         }
-        res.status(200).send("OK");
+
+        // 2. Create New Payment Record
+        const newPayment = new Payment({
+            paymentId: "PAY-" + Date.now(), // Unique ID logic
+            loanId: loanId,
+            customerId: customerId,
+            customerName: customerName,
+            amount: Number(amount),
+            utr: utr,
+            screenshot: screenshot, // 🔥 Is line se image save hogi DB mein
+            status: 'Pending',
+            paymentDate: new Date()
+        });
+
+        await newPayment.save();
+
+        console.log(`✅ Receipt for ${amount} received from ${customerName} (Loan: ${loanId})`);
+
+        res.status(200).json({ 
+            success: true, 
+            message: "Payment receipt submitted successfully! Admin will verify soon." 
+        });
+
     } catch (err) {
-        console.error("Webhook Error:", err);
-        res.status(500).send("Internal Error");
+        console.error("❌ Payment Error:", err);
+        res.status(500).json({ 
+            success: false, 
+            error: "Failed to submit receipt", 
+            details: err.message 
+        });
     }
 };
