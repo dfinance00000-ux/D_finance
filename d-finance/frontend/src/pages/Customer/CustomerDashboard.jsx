@@ -2,7 +2,10 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import API from "../../api/axios";
 import PaymentModal from "../Payment/PaymentModal"; 
-import { FiClock, FiCheckCircle, FiAlertCircle, FiActivity, FiCreditCard } from 'react-icons/fi';
+import { 
+  FiClock, FiCheckCircle, FiAlertCircle, FiActivity, 
+  FiCreditCard, FiHash, FiInfo, FiArrowRight, FiXCircle 
+} from 'react-icons/fi';
 
 const CustomerDashboard = () => {
   const [loans, setLoans] = useState([]);
@@ -40,25 +43,29 @@ const CustomerDashboard = () => {
   const activeLoan = loans.find(l => l.status === 'Disbursed' || l.status === 'Approved');
   const pendingLoan = loans.find(l => ['Applied', 'Verification Pending', 'Field Verified'].includes(l.status));
   
-  // Kitna paisa total dena hai (Principal + Interest)
   const totalPayable = activeLoan ? activeLoan.totalPayable : 0;
   
-  // Kitna pay ho chuka hai (Approved payments only)
   const totalPaid = payments
     .filter(p => p.status === 'Approved')
     .reduce((acc, curr) => acc + Number(curr.amount || 0), 0);
 
-  // Kitna balance baki hai
   const totalDue = activeLoan ? (activeLoan.totalPending || (totalPayable - totalPaid)) : 0;
 
   const openPayGateway = (loan) => {
-    // Modal ko hum 'totalDue' bhejenge taki customer ko baki paisa dikhe
     setSelectedLoan({
       ...loan,
       installmentAmount: loan.weeklyEMI || loan.emiAmount || 0,
-      dueBalance: totalDue // Naya field add kiya modal ke liye
+      dueBalance: totalDue 
     });
     setShowModal(true);
+  };
+
+  const getPaymentStatusStyle = (status) => {
+    switch (status) {
+      case 'Approved': return { bg: '#dcfce7', text: '#15803d', icon: <FiCheckCircle size={12}/> };
+      case 'Rejected': return { bg: '#fee2e2', text: '#b91c1c', icon: <FiXCircle size={12}/> };
+      default: return { bg: '#fef3c7', text: '#92400e', icon: <FiClock size={12}/> };
+    }
   };
 
   if (loading) return <div style={loaderStyle}>🔄 SYNCING YOUR ACCOUNT...</div>;
@@ -101,7 +108,7 @@ const CustomerDashboard = () => {
       {/* 3. Main Content */}
       <div style={mainGrid} className="main-grid">
         
-        {/* Applications & History */}
+        {/* Applications & Payment History */}
         <div style={leftCol}>
           {activeLoan && (
             <div style={activeAlert}>
@@ -113,8 +120,9 @@ const CustomerDashboard = () => {
             </div>
           )}
 
+          {/* --- 📜 LOAN APPLICATIONS LIST --- */}
           <div style={sectionCard}>
-            <h4 style={sectionTitle}>📜 Loan History</h4>
+            <h4 style={sectionTitle}>📜 Loan Applications</h4>
             <div style={{overflowX: 'auto'}}>
               <table style={tableStyle}>
                 <thead>
@@ -134,6 +142,42 @@ const CustomerDashboard = () => {
               </table>
             </div>
           </div>
+
+          {/* --- 💸 FULL PAYMENT HISTORY SECTION --- */}
+          <div style={{...sectionCard, marginTop: '10px'}}>
+            <h4 style={sectionTitle}>💸 Detailed Payment History</h4>
+            <div style={historyList}>
+              {payments.length > 0 ? payments.map((p) => {
+                const statusStyle = getPaymentStatusStyle(p.status);
+                return (
+                  <div key={p._id} style={historyItem}>
+                    <div style={historyMain}>
+                      <div>
+                        <div style={{display:'flex', alignItems:'center', gap:'8px'}}>
+                          <span style={historyAmt}>₹{p.amount.toLocaleString()}</span>
+                          <div style={{...miniBadge, background: statusStyle.bg, color: statusStyle.text}}>
+                            {statusStyle.icon} {p.status}
+                          </div>
+                        </div>
+                        <small style={historyDate}>
+                          {new Date(p.createdAt).toLocaleDateString('en-IN', {day:'2-digit', month:'short', year:'numeric'})} • UTR: {p.utr}
+                        </small>
+                      </div>
+                      <FiArrowRight color="#cbd5e1" />
+                    </div>
+                    {p.adminNote && (
+                      <div style={noteBox}>
+                        <FiInfo size={12} style={{marginTop:'2px'}} />
+                        <span><b>Admin Note:</b> {p.adminNote}</span>
+                      </div>
+                    )}
+                  </div>
+                );
+              }) : (
+                <div style={emptyRow}>No payments made yet.</div>
+              )}
+            </div>
+          </div>
         </div>
 
         {/* Repayment Sidebar */}
@@ -144,7 +188,7 @@ const CustomerDashboard = () => {
               <div style={{textAlign: 'center'}}>
                 <div style={emiDisplay}>
                   <span style={{fontSize:'10px', color:'#94a3b8', fontWeight:'bold'}}>CURRENT EMI DUE</span>
-                  <h2 style={{fontSize: '32px', margin:'10px 0', fontWeight:'950'}}>₹{activeLoan.weeklyEMI || activeLoan.installmentAmount}</h2>
+                  <h2 style={{fontSize: '32px', margin:'10px 0', fontWeight:'950'}}>₹{(activeLoan.weeklyEMI || activeLoan.installmentAmount || 0).toLocaleString()}</h2>
                   <div style={dueTag}>Loan ID: {activeLoan.loanId}</div>
                 </div>
                 
@@ -168,9 +212,9 @@ const CustomerDashboard = () => {
                <div key={p._id} style={receiptMini}>
                   <div>
                     <p style={{margin:0, fontSize:'11px', fontWeight:'bold'}}>{new Date(p.createdAt).toLocaleDateString()}</p>
-                    <small style={{color:'#94a3b8'}}>{p.utr.substring(0, 10)}...</small>
+                    <small style={{color:'#94a3b8'}}>{p.utr?.substring(0, 10)}...</small>
                   </div>
-                  <b style={{color: p.status === 'Approved' ? '#10b981' : '#f59e0b'}}>₹{p.amount}</b>
+                  <b style={{color: p.status === 'Approved' ? '#10b981' : p.status === 'Rejected' ? '#ef4444' : '#f59e0b'}}>₹{p.amount}</b>
                </div>
              ))}
              {payments.length === 0 && <p style={emptyRow}>No payments found.</p>}
@@ -190,7 +234,7 @@ const CustomerDashboard = () => {
 };
 
 // --- Styles ---
-const container = { padding: '20px', maxWidth: '1100px', margin: '0 auto' };
+const container = { padding: '20px', maxWidth: '1100px', margin: '0 auto', minHeight: '100vh', background: '#f8fafc' };
 const headerFlex = { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '30px' };
 const portalTitle = { margin: 0, fontWeight: '950', fontSize: '24px', color: '#0f172a' };
 const welcomeText = { fontSize: '11px', color: '#64748b', fontWeight: '800', textTransform: 'uppercase', marginTop: '5px' };
@@ -200,25 +244,34 @@ const label = { fontSize: '10px', color: '#94a3b8', fontWeight: '900', textTrans
 const val = { fontSize: '22px', fontWeight: '900', marginTop: '5px' };
 const mainGrid = { display: 'grid', gridTemplateColumns: '1.6fr 1fr', gap: '20px' };
 const leftCol = { display: 'flex', flexDirection: 'column', gap: '20px' };
-const sectionCard = { background: '#fff', padding: '25px', borderRadius: '32px', border: '1px solid #e2e8f0' };
-const sectionTitle = { fontSize: '11px', fontWeight: '950', textTransform: 'uppercase', marginBottom: '20px', display:'flex', alignItems:'center', gap:'8px' };
+const sectionCard = { background: '#fff', padding: '25px', borderRadius: '32px', border: '1px solid #e2e8f0', boxShadow: '0 10px 15px -3px rgba(0,0,0,0.02)' };
+const sectionTitle = { fontSize: '11px', fontWeight: '950', textTransform: 'uppercase', marginBottom: '20px', display:'flex', alignItems:'center', gap:'8px', color: '#475569' };
 const activeAlert = { background: '#f0fdf4', padding: '15px', borderRadius: '20px', display: 'flex', gap: '12px', alignItems: 'center', marginBottom: '10px' };
 const emiDisplay = { background: 'rgba(255,255,255,0.05)', padding: '20px', borderRadius: '20px', marginBottom: '20px', border: '1px solid rgba(255,255,255,0.1)' };
 const dueTag = { fontSize: '10px', background: '#3b82f6', color: '#fff', padding: '3px 8px', borderRadius: '6px', display: 'inline-block' };
-const payBtn = { width: '100%', padding: '16px', background: '#fff', color: '#0f172a', border: 'none', borderRadius: '15px', fontWeight: '900', cursor: 'pointer' };
-const applyBtn = { padding: '12px 20px', background: '#0f172a', color: '#fff', border: 'none', borderRadius: '12px', fontWeight: '900', fontSize: '12px' };
+const payBtn = { width: '100%', padding: '16px', background: '#fff', color: '#0f172a', border: 'none', borderRadius: '15px', fontWeight: '900', cursor: 'pointer', transition: '0.3s' };
+const applyBtn = { padding: '12px 20px', background: '#0f172a', color: '#fff', border: 'none', borderRadius: '12px', fontWeight: '900', fontSize: '12px', cursor: 'pointer' };
 const receiptMini = { display:'flex', justifyContent:'space-between', alignItems:'center', padding:'12px 0', borderBottom:'1px solid #f1f5f9' };
-const loaderStyle = { height: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: '900', color: '#94a3b8' };
+const loaderStyle = { height: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: '900', color: '#94a3b8', background: '#f8fafc' };
 const tableStyle = { width: '100%', borderCollapse: 'collapse' };
 const tableHeader = { textAlign: 'left', fontSize: '10px', color: '#94a3b8', paddingBottom: '15px' };
 const tableRow = { borderBottom: '1px solid #f8fafc', fontSize: '13px' };
 const emptyRow = { textAlign:'center', padding:'30px', color:'#cbd5e1', fontSize:'12px', fontWeight:'700' };
 const lockedState = { textAlign:'center', padding:'40px 0' };
 
+// Payment History New Styles
+const historyList = { display: 'flex', flexDirection: 'column', gap: '12px' };
+const historyItem = { padding: '15px', borderRadius: '18px', background: '#f8fafc', border: '1px solid #f1f5f9' };
+const historyMain = { display: 'flex', justifyContent: 'space-between', alignItems: 'center' };
+const historyAmt = { fontSize: '18px', fontWeight: '900', color: '#0f172a' };
+const historyDate = { fontSize: '11px', color: '#94a3b8', display: 'block', marginTop: '2px' };
+const miniBadge = { padding: '3px 8px', borderRadius: '6px', fontSize: '9px', fontWeight: '900', display: 'inline-flex', alignItems: 'center', gap: '4px', textTransform: 'uppercase' };
+const noteBox = { marginTop: '10px', padding: '10px', background: '#fff', borderRadius: '10px', fontSize: '11px', color: '#64748b', display: 'flex', gap: '8px', borderLeft: '3px solid #cbd5e1' };
+
 const statusBadge = (s) => ({
   padding: '4px 10px', borderRadius: '8px', fontSize: '9px', fontWeight: '900',
-  background: ['Disbursed', 'Approved'].includes(s) ? '#dcfce7' : '#fef3c7',
-  color: ['Disbursed', 'Approved'].includes(s) ? '#15803d' : '#92400e',
+  background: ['Disbursed', 'Approved'].includes(s) ? '#dcfce7' : s === 'Rejected' ? '#fee2e2' : '#fef3c7',
+  color: ['Disbursed', 'Approved'].includes(s) ? '#15803d' : s === 'Rejected' ? '#b91c1c' : '#92400e',
 });
 
 const responsiveStyles = `
@@ -226,7 +279,9 @@ const responsiveStyles = `
     .main-grid { grid-template-columns: 1fr !important; }
     .header-flex { flex-direction: column; align-items: flex-start !important; gap: 15px; }
     .grid-stats { grid-template-columns: 1fr 1fr !important; }
+    .sidebar { order: -1; }
   }
+  .table-row td { padding: 12px 0; }
 `;
 
 export default CustomerDashboard;

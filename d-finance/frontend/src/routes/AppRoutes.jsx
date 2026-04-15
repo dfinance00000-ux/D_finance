@@ -45,6 +45,9 @@ import CustomerDashboard from "../pages/Customer/CustomerDashboard";
 import LoanApply from "../pages/Loan/ApplyLoan";
 import LoanTracking from "../pages/Customer/LoanTracking"; 
 import EMIPayments from "../pages/Customer/EMIPayments";
+import PaymentHistory from '../pages/Customer/PaymentHistory';
+
+// ... Routes ke andar
 
 const AppRoutes = () => {
   return (
@@ -100,6 +103,7 @@ const AppRoutes = () => {
         <Route path="apply-loan" element={<LoanApply />} />
         <Route path="tracking" element={<LoanTracking />} />
         <Route path="emi" element={<EMIPayments />} />
+        <Route path="/customer/payment-history" element={<PaymentHistory />} />
       </Route>
 
       {/* 7. Error 404 */}

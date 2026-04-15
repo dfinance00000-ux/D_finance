@@ -771,6 +771,17 @@ app.delete('/api/blogs/:id', async (req, res) => {
     res.status(500).send(err.message);
   }
 });
+// server.js mein ye route dalo
+app.get('/api/loans/my-payments', verifyToken, async (req, res) => {
+    try {
+        const customerId = req.user.id; // Token se ID nikali
+        // Payment model mein customerId matches check kiya
+        const history = await Payment.find({ customerId }).sort({ createdAt: -1 });
+        res.status(200).json(history);
+    } catch (err) {
+        res.status(500).json({ error: "Fetch failed" });
+    }
+});
 // 3. Fix: Accountant Add Karne Ka Logic (Signup Route Update)
 // Note: Aapka existing signup route hi kaam karega, bas dropdown mein 'Accountant' role bhejiye.
 

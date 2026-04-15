@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { Outlet, Link, useNavigate, useLocation } from 'react-router-dom';
 import { 
   FiPieChart, FiPlusCircle, FiActivity, FiCreditCard, 
-  FiLogOut, FiUser, FiBell, FiChevronRight, FiMenu, FiX 
+  FiLogOut, FiUser, FiBell, FiChevronRight, FiMenu, FiX, FiClock 
 } from 'react-icons/fi';
 
 const CustomerLayout = () => {
@@ -21,7 +21,7 @@ const CustomerLayout = () => {
   return (
     <div className="flex min-h-screen bg-[#f8fafc] font-sans antialiased text-slate-900 overflow-x-hidden">
       
-      {/* --- SIDEBAR: Mobile Logic Included --- */}
+      {/* --- SIDEBAR --- */}
       <aside className={`
         fixed inset-y-0 left-0 z-50 w-72 bg-slate-900 text-white flex flex-col transition-transform duration-300 ease-in-out shadow-2xl
         lg:translate-x-0 
@@ -32,7 +32,6 @@ const CustomerLayout = () => {
             <h2 className="text-2xl font-black text-emerald-400 tracking-tighter italic">D-FINANCE</h2>
             <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest mt-1">Customer Portal</p>
           </div>
-          {/* Close button for Mobile */}
           <button onClick={() => setIsMobileMenuOpen(false)} className="lg:hidden text-slate-400">
             <FiX size={24} />
           </button>
@@ -43,9 +42,12 @@ const CustomerLayout = () => {
           <MenuLink to="/customer/apply-loan" icon={<FiPlusCircle />} label="Apply for Loan" active={isActive('/customer/apply-loan')} onClick={() => setIsMobileMenuOpen(false)} />
           <MenuLink to="/customer/tracking" icon={<FiActivity />} label="Track Application" active={isActive('/customer/tracking')} onClick={() => setIsMobileMenuOpen(false)} />
           <MenuLink to="/customer/emi" icon={<FiCreditCard />} label="EMI Payments" active={isActive('/customer/emi')} onClick={() => setIsMobileMenuOpen(false)} />
+          
+          {/* 🔥 NEW: Payment History Added Here */}
+          <MenuLink to="/customer/payment-history" icon={<FiClock />} label="Payment History" active={isActive('/customer/payment-history')} onClick={() => setIsMobileMenuOpen(false)} />
         </nav>
 
-        {/* User Card at Bottom */}
+        {/* User Card */}
         <div className="p-4 border-t border-slate-800 bg-slate-900/50">
           <div className="flex items-center gap-3 p-3 rounded-2xl bg-slate-800/40 mb-4">
             <div className="w-10 h-10 bg-emerald-500/20 rounded-xl flex items-center justify-center text-emerald-400 font-bold flex-shrink-0">
@@ -67,19 +69,15 @@ const CustomerLayout = () => {
 
       {/* --- OVERLAY for Mobile --- */}
       {isMobileMenuOpen && (
-        <div 
-          className="fixed inset-0 bg-black/50 backdrop-blur-sm z-40 lg:hidden"
-          onClick={() => setIsMobileMenuOpen(false)}
-        ></div>
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-40 lg:hidden" onClick={() => setIsMobileMenuOpen(false)}></div>
       )}
 
       {/* --- MAIN CONTENT AREA --- */}
       <div className="flex-1 flex flex-col min-h-screen lg:ml-72 transition-all duration-300">
         
-        {/* Navbar / Header */}
+        {/* Navbar */}
         <header className="h-20 bg-white/80 backdrop-blur-md border-b border-slate-100 px-6 lg:px-10 flex items-center justify-between sticky top-0 z-40">
           <div className="flex items-center gap-4">
-            {/* Hamburger button */}
             <button onClick={() => setIsMobileMenuOpen(true)} className="lg:hidden p-2 bg-slate-100 rounded-xl text-slate-600">
               <FiMenu size={20} />
             </button>
@@ -91,10 +89,6 @@ const CustomerLayout = () => {
                 {location.pathname.split('/').pop().replace('-', ' ')}
               </span>
             </div>
-            {/* Small text for mobile breadcrumb */}
-            <span className="sm:hidden text-slate-900 font-black text-xs uppercase tracking-widest">
-                {location.pathname.split('/').pop().replace('-', ' ')}
-            </span>
           </div>
 
           <div className="flex items-center gap-4 lg:gap-6">
