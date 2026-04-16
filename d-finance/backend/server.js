@@ -24,7 +24,8 @@ app.use(cors({
   origin: [
     "http://localhost:5173",                   // Local Testing ke liye
     "https://d-finance-izsi.vercel.app",       // Aapka Frontend (Vercel)
-    "https://dfinance.space"                   // Aapka Custom Domain (agar hai)
+    "https://dfinance.space",
+    "https://www.dfinance.space"               // Aapka Custom Domain (agar hai)
   ],
   methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
   credentials: true,
