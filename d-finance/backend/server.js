@@ -783,6 +783,7 @@ app.get('/api/loans/my-payments', verifyToken, async (req, res) => {
         res.status(500).json({ error: "Fetch failed" });
     }
 });
+
 // 3. Fix: Accountant Add Karne Ka Logic (Signup Route Update)
 // Note: Aapka existing signup route hi kaam karega, bas dropdown mein 'Accountant' role bhejiye.
 

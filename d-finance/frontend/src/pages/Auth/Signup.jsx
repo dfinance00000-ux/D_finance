@@ -67,15 +67,15 @@ const Signup = () => {
             <div style={lineStyle}></div>
           </div>
 
-          {/* Role Selection */}
-          <div style={inputContainer}>
-            <select name="role" style={selectField} value={formData.role} onChange={handleInputChange}>
-              <option value="Customer">Customer (Borrower)</option>
-              <option value="User">Field Officer (Advisor)</option>
-            </select>
-            <label style={fixedLabel}>Join As</label>
-            <div style={lineStyle}></div>
-          </div>
+          {/* Role Selection - Fixed as Customer */}
+<div style={inputContainer}>
+  <div style={{...inputField, padding: '10px 0', fontWeight: '700', color: '#5a6b8d'}}>
+    Customer (Borrower)
+  </div>
+  <input type="hidden" name="role" value="Customer" /> {/* Backend safety ke liye hidden field */}
+  <label style={fixedLabel}>Joining As</label>
+  <div style={lineStyle}></div>
+</div>
 
           {/* Mobile Number */}
           <div style={inputContainer}>

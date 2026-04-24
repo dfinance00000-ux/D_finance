@@ -3,7 +3,7 @@ import API from "../../api/axios";
 import { 
   FiUsers, FiRefreshCw, FiSearch, FiChevronRight, FiAlertCircle, 
   FiTrendingUp, FiXCircle, FiClock, FiEdit3, FiX, FiCheckCircle,
-  FiHome, FiBriefcase, FiUser, FiInfo
+  FiHome, FiBriefcase, FiUser, FiInfo, FiDollarSign
 } from 'react-icons/fi';
 
 const MyTeam = () => {
@@ -13,6 +13,10 @@ const MyTeam = () => {
   const [debugInfo, setDebugInfo] = useState("");
   const [selectedMember, setSelectedMember] = useState(null); 
   const [isUpdating, setIsUpdating] = useState(false);
+  
+  // --- 🔥 NEW: Cash Collection State ---
+  const [cashAmount, setCashAmount] = useState("");
+  const [isPaying, setIsPaying] = useState(false);
 
   const userStr = localStorage.getItem('user');
   const currentUser = userStr ? JSON.parse(userStr) : null;
@@ -57,17 +61,46 @@ const MyTeam = () => {
   };
 
   const handleUpdate = async (e) => {
-    e.preventDefault();
+    if(e) e.preventDefault();
     setIsUpdating(true);
     try {
       await API.patch(`/loans/${selectedMember._id}`, selectedMember);
       alert("✅ Audit Report Synchronized!");
       setSelectedMember(null);
-      fetchMyRequests(); // Refreshing list
+      fetchMyTeam(); 
     } catch (err) {
       alert("❌ Update Failed");
     } finally {
       setIsUpdating(false);
+    }
+  };
+
+  // --- 🔥 NEW: Cash Payment Handler ---
+  const handleCollectCash = async () => {
+    if (!cashAmount || cashAmount <= 0) return alert("Please enter a valid amount");
+    
+    const confirmMsg = `Confirm Cash Collection: ₹${cashAmount} from ${selectedMember.customerName}?`;
+    if (!window.confirm(confirmMsg)) return;
+
+    setIsPaying(true);
+    try {
+      await API.post(`/loans/pay-manual/${selectedMember.loanId}`, {
+        amount: Number(cashAmount),
+        utr: `CASH_OFFICER_${currentUser.fullName.split(' ')[0].toUpperCase()}_${Date.now().toString().slice(-4)}`,
+        customerId: selectedMember.customerId,
+        customerName: selectedMember.customerName,
+        screenshot: "CASH_RECPT", 
+        adminNote: `Cash collected by Officer: ${currentUser.fullName}`
+      });
+
+      alert("💰 Cash Repayment Logged! Status: Pending Accountant Approval.");
+      setCashAmount("");
+      setSelectedMember(null);
+      fetchMyTeam();
+    } catch (err) {
+      alert("❌ Payment Failed: " + (err.response?.data?.error || "Server Error"));
+    } finally {
+      setIsPaying(false);
     }
   };
 
@@ -119,101 +152,112 @@ const MyTeam = () => {
                 <span className="text-[8px] font-black px-2 py-0.5 bg-slate-100 text-slate-400 rounded">ID: {member.loanId}</span>
               </div>
             </div>
-            <FiChevronRight className="text-slate-300" />
+            <div className="flex items-center gap-3">
+                <span className={`text-[8px] font-black px-2 py-1 rounded uppercase ${member.status === 'Disbursed' ? 'bg-emerald-100 text-emerald-600' : 'bg-orange-100 text-orange-600'}`}>{member.status}</span>
+                <FiChevronRight className="text-slate-300" />
+            </div>
           </div>
         ))}
       </div>
 
-      {/* --- Detailed Edit Modal (LUC Report Fields Included) --- */}
+      {/* --- Detailed Modal (With NEW Side Repayment Section) --- */}
       {selectedMember && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
-          <div className="bg-white w-full max-w-2xl rounded-[2.5rem] overflow-hidden shadow-2xl animate-in zoom-in duration-200">
+          <div className="bg-white w-full max-w-4xl rounded-[2.5rem] overflow-hidden shadow-2xl animate-in zoom-in duration-200">
             <div className="p-6 bg-slate-900 text-white flex justify-between items-center">
               <div>
-                <h3 className="font-black italic text-xl uppercase tracking-tighter">Audit & LUC Report</h3>
-                <p className="text-[10px] font-bold text-slate-400 tracking-widest uppercase">ID: {selectedMember.loanId}</p>
+                <h3 className="font-black italic text-xl uppercase tracking-tighter">File Control Center</h3>
+                <p className="text-[10px] font-bold text-slate-400 tracking-widest uppercase">ID: {selectedMember.loanId} | Customer: {selectedMember.customerName}</p>
               </div>
               <button onClick={() => setSelectedMember(null)} className="p-2 hover:bg-white/10 rounded-full"><FiX size={24}/></button>
             </div>
 
-            <form onSubmit={handleUpdate} className="p-8 space-y-8 max-h-[75vh] overflow-y-auto custom-scroll">
-              
-              {/* Section 1: Basic Info */}
-              <div className="space-y-4">
-                <SectionHeader icon={<FiInfo/>} title="Basic File Info" />
-                <div className="grid grid-cols-2 gap-4">
-                  <InputGroup label="Customer Name" val={selectedMember.customerName} onChange={(v) => setSelectedMember({...selectedMember, customerName: v})} />
-                  <InputGroup label="Customer Phone" val={selectedMember.customerMobile || selectedMember.nomineeMobile} onChange={(v) => setSelectedMember({...selectedMember, customerMobile: v})} />
-                  <InputGroup label="Loan Amount" val={selectedMember.amount} type="number" onChange={(v) => setSelectedMember({...selectedMember, amount: v})} />
-                  <InputGroup label="EMI Amount" val={selectedMember.installmentAmount || selectedMember.weeklyEMI} type="number" onChange={(v) => setSelectedMember({...selectedMember, installmentAmount: v})} />
+            <div className="flex flex-col md:flex-row h-[75vh]">
+                {/* Left: Audit Form (Old Section) */}
+                <div className="flex-1 overflow-y-auto p-8 space-y-8 border-r border-slate-100 custom-scroll">
+                    <form onSubmit={handleUpdate} className="space-y-8">
+                        <div className="space-y-4">
+                            <SectionHeader icon={<FiInfo/>} title="Basic File Info" />
+                            <div className="grid grid-cols-2 gap-4">
+                                <InputGroup label="Customer Name" val={selectedMember.customerName} onChange={(v) => setSelectedMember({...selectedMember, customerName: v})} />
+                                <InputGroup label="Customer Phone" val={selectedMember.customerMobile || selectedMember.nomineeMobile} onChange={(v) => setSelectedMember({...selectedMember, customerMobile: v})} />
+                                <InputGroup label="Loan Amount" val={selectedMember.amount} type="number" onChange={(v) => setSelectedMember({...selectedMember, amount: v})} />
+                                <InputGroup label="EMI Amount" val={selectedMember.installmentAmount || selectedMember.weeklyEMI} type="number" onChange={(v) => setSelectedMember({...selectedMember, installmentAmount: v})} />
+                            </div>
+                        </div>
+
+                        <div className="space-y-4">
+                            <SectionHeader icon={<FiHome/>} title="Residential & Area Audit" />
+                            <div className="grid grid-cols-2 gap-4">
+                                <SelectGroup label="House Type" val={selectedMember.houseType} options={['CONCRETE', 'KUTCHA', 'TILED', 'HUT']} onChange={(v) => setSelectedMember({...selectedMember, houseType: v})} />
+                                <SelectGroup label="Area Type" val={selectedMember.areaType} options={['RURAL', 'URBAN', 'SEMI-URBAN']} onChange={(v) => setSelectedMember({...selectedMember, areaType: v})} />
+                                <SelectGroup label="House Ownership" val={selectedMember.residenceNature} options={['Owned', 'Rented', 'Ancestral']} onChange={(v) => setSelectedMember({...selectedMember, residenceNature: v})} />
+                                <InputGroup label="Monthly Income" val={selectedMember.monthlyIncome} type="number" onChange={(v) => setSelectedMember({...selectedMember, monthlyIncome: v})} />
+                            </div>
+                        </div>
+
+                        <div className="space-y-4">
+                            <SectionHeader icon={<FiBriefcase/>} title="File Status Control" />
+                            <select className="w-full p-4 bg-slate-100 rounded-2xl text-xs font-black text-slate-700 outline-none" value={selectedMember.status} onChange={(e) => setSelectedMember({...selectedMember, status: e.target.value})}>
+                                <option value="Applied">Applied</option>
+                                <option value="Verification Pending">Verification Pending</option>
+                                <option value="Field Verified">Field Verified</option>
+                                <option value="Disbursed">Disbursed</option>
+                                <option value="Rejected">Rejected</option>
+                            </select>
+                        </div>
+
+                        <button type="submit" disabled={isUpdating} className="w-full py-4 bg-slate-900 text-white rounded-2xl text-xs font-black uppercase shadow-lg">
+                            {isUpdating ? "Processing..." : "Sync Audit Report"}
+                        </button>
+                    </form>
                 </div>
-              </div>
 
-              {/* Section 2: Residential Audit (LUC) */}
-              <div className="space-y-4">
-                <SectionHeader icon={<FiHome/>} title="Residential & Area Audit" />
-                <div className="grid grid-cols-2 gap-4">
-                  <SelectGroup 
-                    label="House Type" 
-                    val={selectedMember.houseType} 
-                    options={['CONCRETE', 'KUTCHA', 'TILED', 'HUT']} 
-                    onChange={(v) => setSelectedMember({...selectedMember, houseType: v})} 
-                  />
-                  <SelectGroup 
-                    label="Area Type" 
-                    val={selectedMember.areaType} 
-                    options={['RURAL', 'URBAN', 'SEMI-URBAN']} 
-                    onChange={(v) => setSelectedMember({...selectedMember, areaType: v})} 
-                  />
-                  <SelectGroup 
-                    label="House Ownership" 
-                    val={selectedMember.residenceNature} 
-                    options={['Owned', 'Rented', 'Ancestral']} 
-                    onChange={(v) => setSelectedMember({...selectedMember, residenceNature: v})} 
-                  />
-                  <InputGroup label="Monthly Income" val={selectedMember.monthlyIncome} type="number" onChange={(v) => setSelectedMember({...selectedMember, monthlyIncome: v})} />
+                {/* Right: 🔥 NEW Side Repayment Section */}
+                <div className="w-full md:w-80 bg-slate-50 p-8 flex flex-col justify-start">
+                    <SectionHeader icon={<FiDollarSign/>} title="Repayment Node" />
+                    <p className="text-[10px] text-slate-400 mt-2 leading-relaxed">If the customer is paying by cash, enter the amount below to log the collection.</p>
+                    
+                    <div className="mt-8 space-y-6">
+                        <div className="bg-white p-6 rounded-3xl shadow-sm border border-slate-200">
+                            <label className="text-[9px] font-black text-slate-400 uppercase block mb-2">Collection Amount</label>
+                            <div className="flex items-center gap-2">
+                                <span className="text-xl font-black text-slate-300">₹</span>
+                                <input 
+                                    type="number" 
+                                    className="w-full text-2xl font-black text-slate-900 outline-none placeholder:text-slate-100" 
+                                    placeholder="0.00"
+                                    value={cashAmount}
+                                    onChange={(e) => setCashAmount(e.target.value)}
+                                />
+                            </div>
+                        </div>
+
+                        <div className="space-y-3">
+                            <div className="flex justify-between text-[10px] font-bold px-2">
+                                <span className="text-slate-400">Balance Due:</span>
+                                <span className="text-slate-900">₹{(selectedMember.totalPayable - selectedMember.totalPaid) || 0}</span>
+                            </div>
+                            <button 
+                                onClick={handleCollectCash}
+                                disabled={isPaying || !cashAmount}
+                                className="w-full py-5 bg-emerald-600 text-white rounded-2xl font-black uppercase text-[10px] tracking-widest shadow-xl shadow-emerald-500/20 active:scale-95 transition-all disabled:opacity-50"
+                            >
+                                {isPaying ? "Verifying..." : "Collect Cash Now"}
+                            </button>
+                        </div>
+
+                        {/* Recent Activity Mini-log */}
+                        <div className="pt-6 border-t border-slate-200">
+                             <p className="text-[9px] font-black text-slate-400 uppercase mb-4">Account Status</p>
+                             <div className="flex items-center justify-between p-3 bg-white rounded-xl border border-slate-100">
+                                 <span className="text-[10px] font-bold text-slate-500">Repayment Type</span>
+                                 <span className="text-[10px] font-black text-blue-600">Manual / Cash</span>
+                             </div>
+                        </div>
+                    </div>
                 </div>
-              </div>
-
-              {/* Section 3: Nominee Details */}
-              <div className="space-y-4">
-                <SectionHeader icon={<FiUser/>} title="Nominee Verification" />
-                <div className="grid grid-cols-2 gap-4">
-                  <InputGroup label="Nominee Name" val={selectedMember.nomineeName} onChange={(v) => setSelectedMember({...selectedMember, nomineeName: v})} />
-                  <InputGroup label="Nominee Phone" val={selectedMember.nomineeMobile} onChange={(v) => setSelectedMember({...selectedMember, nomineeMobile: v})} />
-                  <SelectGroup 
-                    label="Relationship" 
-                    val={selectedMember.nomineeRelation} 
-                    options={['SPOUSE', 'FATHER', 'MOTHER', 'SON', 'DAUGHTER', 'BROTHER']} 
-                    onChange={(v) => setSelectedMember({...selectedMember, nomineeRelation: v})} 
-                  />
-                  <InputGroup label="Nominee Age" val={selectedMember.nomineeAge} type="number" onChange={(v) => setSelectedMember({...selectedMember, nomineeAge: v})} />
-                </div>
-              </div>
-
-              {/* Section 4: Workflow Status */}
-              <div className="space-y-4">
-                <SectionHeader icon={<FiBriefcase/>} title="File Status" />
-                <select 
-                  className="w-full p-4 bg-slate-100 rounded-2xl text-xs font-black text-slate-700 outline-none"
-                  value={selectedMember.status}
-                  onChange={(e) => setSelectedMember({...selectedMember, status: e.target.value})}
-                >
-                  <option value="Applied">Applied</option>
-                  <option value="Verification Pending">Verification Pending</option>
-                  <option value="Field Verified">Field Verified</option>
-                  <option value="Disbursed">Disbursed</option>
-                  <option value="Rejected">Rejected</option>
-                </select>
-              </div>
-
-              <div className="pt-6 flex gap-3">
-                <button type="button" onClick={() => setSelectedMember(null)} className="flex-1 py-4 text-xs font-black text-slate-400 uppercase">Cancel</button>
-                <button type="submit" disabled={isUpdating} className="flex-1 py-4 bg-emerald-600 text-white rounded-2xl text-xs font-black uppercase shadow-lg shadow-emerald-500/30">
-                  {isUpdating ? "Processing..." : "Sync Audit Report"}
-                </button>
-              </div>
-            </form>
+            </div>
           </div>
         </div>
       )}
