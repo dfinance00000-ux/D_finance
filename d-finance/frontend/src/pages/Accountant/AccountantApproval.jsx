@@ -81,7 +81,6 @@ const AccountantApproval = () => {
     <div style={containerStyle}>
       <style>{responsiveCSS}</style>
       
-      {/* Zoom Image Overlay */}
       {zoomImg && (
         <div style={zoomOverlay} onClick={() => setZoomImg(null)}>
           <div style={zoomContent}>
@@ -91,7 +90,6 @@ const AccountantApproval = () => {
         </div>
       )}
 
-      {/* Header Section */}
       <div style={headerSection} className="header-resp">
         <div>
           <h2 style={mainTitle}>🛡️ ACCOUNTANT TERMINAL</h2>
@@ -100,7 +98,6 @@ const AccountantApproval = () => {
         <button onClick={fetchVerified} style={refreshBtn}>REFRESH QUEUE</button>
       </div>
 
-      {/* Main Grid */}
       <div className="grid-resp" style={grid}>
         {verifiedLoans.length === 0 ? (
           <div style={noDataBox}><FiCheckCircle size={50} color="#10b981" /><p>No pending approvals.</p></div>
@@ -122,7 +119,6 @@ const AccountantApproval = () => {
         )}
       </div>
 
-      {/* Audit Modal */}
       {selectedLoan && (
         <div style={modalOverlay}>
           <div style={modalContent}>
@@ -132,7 +128,6 @@ const AccountantApproval = () => {
             </div>
 
             <div style={modalBody} className="modal-body-resp">
-              {/* 1. Bank Details */}
               <div style={sectionCard('#f0fdf4', '#10b981')}>
                 <h4 style={sectionTitle}><FiCreditCard/> BANK SETTLEMENT</h4>
                 <div className="info-grid-resp" style={infoGrid}>
@@ -144,7 +139,6 @@ const AccountantApproval = () => {
                 </div>
               </div>
 
-              {/* 2. LUC Report */}
               <div style={sectionCard('#fffbeb', '#f59e0b')}>
                 <h4 style={sectionTitle}><FiMapPin/> FIELD REPORT (LUC)</h4>
                 <div className="info-grid-resp" style={infoGrid}>
@@ -155,7 +149,6 @@ const AccountantApproval = () => {
                 </div>
               </div>
 
-              {/* 3. Nominee */}
               <div style={sectionCard('#f8fafc', '#64748b')}>
                 <h4 style={sectionTitle}><FiUser/> NOMINEE INFO</h4>
                 <div className="info-grid-resp" style={infoGrid}>
@@ -165,22 +158,21 @@ const AccountantApproval = () => {
                 </div>
               </div>
 
-              {/* 4. Digital Vault - Image Slider */}
+              {/* 🔥 FIXED Digital Vault Mapping: Using Model-Exact Keys */}
               <div style={sectionCard('#fff', '#0f172a')}>
                 <h4 style={sectionTitle}><FiCamera/> KYC VAULT</h4>
                 <div style={imageScroll} className="scroll-resp">
                   <DocThumbnail label="Customer Photo" src={selectedLoan.custLivePhoto} onZoom={setZoomImg} />
-                  <DocThumbnail label="Aadhaar Front" src={selectedLoan.aadhaarFront} onZoom={setZoomImg} />
-                  <DocThumbnail label="Aadhaar Back" src={selectedLoan.aadhaarBack} onZoom={setZoomImg} />
-                  <DocThumbnail label="Voter/PAN" src={selectedLoan.custPAN || selectedLoan.secondaryIdFront} onZoom={setZoomImg} />
-                  <DocThumbnail label="Signature" src={selectedLoan.custSignature || selectedLoan.memberSignature} onZoom={setZoomImg} />
+                  <DocThumbnail label="Aadhaar Front" src={selectedLoan.custAadhaarFront} onZoom={setZoomImg} />
+                  <DocThumbnail label="Aadhaar Back" src={selectedLoan.custAadhaarBack} onZoom={setZoomImg} />
+                  <DocThumbnail label="Voter/PAN" src={selectedLoan.custVoterFront} onZoom={setZoomImg} />
+                  <DocThumbnail label="Signature" src={selectedLoan.custSignature} onZoom={setZoomImg} />
                   <DocThumbnail label="Nominee Pic" src={selectedLoan.nomineePic} onZoom={setZoomImg} />
                   <DocThumbnail label="Passbook" src={selectedLoan.passbookPic} onZoom={setZoomImg} />
                 </div>
               </div>
             </div>
 
-            {/* Modal Footer with Mobile Responsive Buttons */}
             <div style={modalFooter} className="footer-resp">
               <div style={actionRow}>
                 <label style={checkboxLabel}>
@@ -207,7 +199,7 @@ const AccountantApproval = () => {
   );
 };
 
-// --- Helpers ---
+// ... (Sub-components and Styles remain exactly the same as your uploaded version)
 const DataField = ({ label, value, highlight }) => (
   <div style={{minWidth: '100px', marginBottom: '10px'}}>
     <p style={{ margin: 0, fontSize: '8px', fontWeight: 900, color: '#94a3b8', textTransform: 'uppercase' }}>{label}</p>
@@ -229,13 +221,11 @@ const DocThumbnail = ({ label, src, onZoom }) => (
   </div>
 );
 
-// --- Responsive Styles ---
 const containerStyle = { padding: '15px', background: '#f4f7fe', minHeight: '100vh', fontFamily: 'sans-serif' };
 const headerSection = { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' };
 const mainTitle = { color: '#0f172a', fontWeight: 950, fontSize: '20px' };
 const subTitleText = { fontSize: '10px', color: '#64748b', fontWeight: 'bold' };
 const refreshBtn = { background: '#0f172a', color: '#fff', border: 'none', padding: '8px 15px', borderRadius: '10px', fontWeight: '900', fontSize: '10px' };
-
 const grid = { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: '15px' };
 const card = { background: '#fff', padding: '20px', borderRadius: '25px', border: '1px solid #e2e8f0', boxShadow: '0 4px 10px rgba(0,0,0,0.02)' };
 const cardHeader = { display: 'flex', justifyContent: 'space-between', marginBottom: '10px' };
@@ -244,32 +234,26 @@ const statusBadge = { fontSize: '9px', fontWeight: '900', color: '#2563eb' };
 const custNameText = { fontSize: '18px', fontWeight: '900', color: '#1e293b', marginBottom: '10px' };
 const miniStatsBox = { display: 'flex', justifyContent: 'space-between', padding: '12px', background: '#f8fafc', borderRadius: '15px', marginBottom: '15px' };
 const auditBtn = { width: '100%', padding: '12px', background: '#0f172a', color: '#fff', border: 'none', borderRadius: '12px', fontWeight: '900' };
-
 const modalOverlay = { position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.8)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: '10px' };
 const modalContent = { background: '#fff', borderRadius: '25px', width: '100%', maxWidth: '800px', maxHeight: '95vh', overflow: 'hidden' };
 const modalHeader = { padding: '15px 20px', background: '#0f172a', color: '#fff', display: 'flex', justifyContent: 'space-between', alignItems: 'center' };
 const modalBody = { padding: '15px 20px', overflowY: 'auto', maxHeight: '60vh' };
 const modalFooter = { padding: '15px 20px', background: '#f8fafc' };
-
 const sectionCard = (bg, border) => ({ background: bg, padding: '15px', borderRadius: '20px', marginBottom: '12px', border: `1px solid ${border}20` });
 const sectionTitle = { fontSize: '10px', fontWeight: '900', display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '12px', color: '#475569' };
 const infoGrid = { display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '10px' };
-
 const imageScroll = { display: 'flex', gap: '12px', overflowX: 'auto', paddingBottom: '8px' };
 const thumbContainer = { flex: '0 0 110px' };
 const imgWrapper = { position: 'relative', height: '80px', borderRadius: '12px', overflow: 'hidden', border: '2px solid #fff' };
 const thumbImg = { width: '100%', height: '100%', objectFit: 'cover' };
 const zoomBadge = { position: 'absolute', bottom: '4px', right: '4px', background: 'rgba(0,0,0,0.6)', color: '#fff', padding: '3px', borderRadius: '4px' };
-
 const actionRow = { marginBottom: '12px', padding: '10px', background: '#fff', borderRadius: '10px', border: '1px solid #e2e8f0' };
 const checkboxLabel = { display: 'flex', alignItems: 'center', gap: '8px', fontSize: '11px', fontWeight: 'bold', color: '#059669' };
 const footerButtons = { display: 'flex', gap: '8px' };
-
 const disburseBtn = { flex: 2, padding: '14px', background: '#10b981', color: '#fff', border: 'none', borderRadius: '12px', fontWeight: '950', fontSize: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' };
 const disabledBtn = { ...disburseBtn, background: '#cbd5e1' };
 const rejectBtn = { flex: 1, padding: '14px', background: '#f59e0b', color: '#fff', border: 'none', borderRadius: '12px', fontWeight: '900', fontSize: '12px' };
 const deleteBtn = { padding: '14px', background: '#ef4444', color: '#fff', border: 'none', borderRadius: '12px' };
-
 const zoomOverlay = { position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.95)', zIndex: 2000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '10px' };
 const zoomContent = { position: 'relative', width: '100%', maxWidth: '800px' };
 const fullImg = { width: '100%', maxHeight: '80vh', objectFit: 'contain' };

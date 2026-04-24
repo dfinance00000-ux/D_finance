@@ -12,12 +12,30 @@ const AdvisorVerification = () => {
   const [addressName, setAddressName] = useState('Detecting location...');
   const [step, setStep] = useState(1);
   
+  // 🔥 FIXED: Field names now match exactly with Loan.js Model
   const [fieldForm, setFieldForm] = useState({
     religion: 'HINDU', category: 'GENERAL', houseType: 'CONCRETE', areaType: 'RURAL', residenceNature: 'Owned',
     monthlyIncome: '', expenditure: '', familyIncomeActivities: 'Business', memberOccupation: '', 
     nomineeName: '', nomineeDOB: '', nomineeAge: '', nomineeGender: 'MALE', nomineeUID: '', nomineeVoterId: '', nomineeMobile: '', 
     nomineeRelation: 'SPOUSE', nomineeAddress: '', nomineeCategory: 'GENERAL',
-    nomineePic: '', custLivePhoto: '', aadhaarFront: '', aadhaarBack: '', secondaryIdFront: '', secondaryIdBack: '', memberSignature: '',
+    
+    custLivePhoto: '', 
+    custAadhaarFront: '', // Database key yahi hai
+    custAadhaarBack: '',  // Database key yahi hai
+    custVoterFront: '',   // Voter/PAN ke liye
+    custSignature: '',    // Signature ke liye
+    nomineePic: '', 
+    passbookPic: '',      // Passbook ke liye
+    secondaryIdBack: '',
+    // 👇 Key Fix: Exact Backend Field Names
+    // custLivePhoto: '', 
+    // custAadhaarFront: '', 
+    // custAadhaarBack: '', 
+    // custVoterFront: '', // Added for Voter/PAN mapping
+    // custSignature: '', 
+    // nomineePic: '', 
+    // passbookPic: '', // Added for Passbook mapping
+
     ifscCode: '', bankAccountNumber: '', confirmAccountNumber: '', accountHolderName: '', customerMobile: '', loanId: '', customerId: '',
     locationName: ''
   });
@@ -84,15 +102,15 @@ const AdvisorVerification = () => {
   };
 
   const handleSOPSubmit = async () => {
-    // Required Photo Validation
-    if (!fieldForm.custLivePhoto || !fieldForm.aadhaarFront || !fieldForm.memberSignature) {
+    // 🔥 FIXED: Check mandatory fields with updated names
+    if (!fieldForm.custLivePhoto || !fieldForm.custAadhaarFront || !fieldForm.custSignature) {
       return alert("⚠️ Error: Please capture all mandatory photos (Customer, Aadhar, Signature) before submission.");
     }
 
     setLoading(true);
     const finalPayload = {
       ...fieldForm,
-      status: "Field Verified", // Fixed: Moving forward in workflow
+      status: "Field Verified",
       inspectionDate: new Date().toISOString(),
       advisorId: currentAdvisor.id || currentAdvisor._id,
       verifiedByName: currentAdvisor.fullName
@@ -110,7 +128,6 @@ const AdvisorVerification = () => {
     }
   };
 
-  // 🔥 Fixed Navigation: Using explicit type="button" to prevent form submission
   const nextStep = (e) => {
     e.preventDefault();
     setStep(prev => prev + 1);
@@ -191,23 +208,22 @@ const AdvisorVerification = () => {
                 </div>
               )}
 
-              {step === 3 && (
-                <div className="animate-fade">
-                    <h4 style={sectionTitle}><FiCamera /> 3. KYC Evidence</h4>
-                    <div className="doc-resp-grid" style={docGrid}>
-                        <CaptureBox label="Customer Photo *" field="custLivePhoto" value={fieldForm.custLivePhoto} onInput={handleImageInput} />
-                        <CaptureBox label="Aadhar Front *" field="aadhaarFront" value={fieldForm.aadhaarFront} onInput={handleImageInput} />
-                        <CaptureBox label="Aadhar Back *" field="aadhaarBack" value={fieldForm.aadhaarBack} onInput={handleImageInput} />
-                        <CaptureBox label="Signature *" field="memberSignature" value={fieldForm.memberSignature} onInput={handleImageInput} />
-                        <CaptureBox label="Nominee Photo *" field="nomineePic" value={fieldForm.nomineePic} onInput={handleImageInput} />
-                        <CaptureBox label="Other ID *" field="secondaryIdBack" value={fieldForm.secondaryIdBack} onInput={handleImageInput} />
-                    </div>
-                    <div style={locationBox}>
-                        <FiMapPin /> <span style={{fontSize:'12px'}}>{addressName}</span>
-                    </div>
-                </div>
-              )}
-
+              {/* PAGE 3: KYC EVIDENCE */}
+{step === 3 && (
+  <div className="animate-fade">
+      <h4 style={sectionTitle}><FiCamera /> 3. KYC Evidence</h4>
+      <div className="doc-resp-grid" style={docGrid}>
+          {/* Ye keys ab database mein sahi jagah jayengi */}
+          <CaptureBox label="Customer Photo *" field="custLivePhoto" value={fieldForm.custLivePhoto} onInput={handleImageInput} />
+          <CaptureBox label="Aadhar Front *" field="custAadhaarFront" value={fieldForm.custAadhaarFront} onInput={handleImageInput} />
+          <CaptureBox label="Aadhar Back *" field="custAadhaarBack" value={fieldForm.custAadhaarBack} onInput={handleImageInput} />
+          <CaptureBox label="Voter/PAN" field="custVoterFront" value={fieldForm.custVoterFront} onInput={handleImageInput} />
+          <CaptureBox label="Signature *" field="custSignature" value={fieldForm.custSignature} onInput={handleImageInput} />
+          <CaptureBox label="Nominee Pic" field="nomineePic" value={fieldForm.nomineePic} onInput={handleImageInput} />
+          <CaptureBox label="Passbook" field="passbookPic" value={fieldForm.passbookPic} onInput={handleImageInput} />
+      </div>
+  </div>
+)}
               <div style={footerAction}>
                 {step > 1 ? (
                     <button type="button" onClick={prevStep} style={cancelBtn}>BACK</button>
@@ -231,7 +247,7 @@ const AdvisorVerification = () => {
   );
 };
 
-// --- Sub Components ---
+// Sub-components and Styles remain the same...
 const InputField = ({ label, type = "text", value, onChange, readOnly = false }) => (
   <div style={inputGroup}>
     <label style={labelStyle}>{label}</label>
@@ -251,11 +267,8 @@ const SelectField = ({ label, options, value, onChange }) => (
 const CaptureBox = ({ label, field, value, onInput }) => {
   const fileRef = useRef(null);
   const camRef = useRef(null);
-  
-  // 🔥 Fixed Camera Trigger: Direct ref call
   const openGallery = (e) => { e.preventDefault(); fileRef.current.click(); };
   const openCamera = (e) => { e.preventDefault(); camRef.current.click(); };
-
   return (
     <div style={upBox}>
       <label style={miniLabel}>{label}</label>
@@ -263,10 +276,8 @@ const CaptureBox = ({ label, field, value, onInput }) => {
         <button type="button" onClick={openGallery} style={smBtn}><FiUpload /> Gallery</button>
         <button type="button" onClick={openCamera} style={smBtnPrimary}><FiCamera /> Camera</button>
       </div>
-      {/* Input tags for mobile OS detection */}
       <input type="file" ref={fileRef} style={{display:'none'}} accept="image/*" onChange={(e) => onInput(e, field)} />
       <input type="file" ref={camRef} style={{display:'none'}} accept="image/*" capture="environment" onChange={(e) => onInput(e, field)} />
-      
       <div style={imgContainerPreview}>
         {value ? <img src={value} style={imgPrev} alt="preview" /> : <div style={placeholderIcon}><FiCamera size={20} color="#cbd5e1"/></div>}
       </div>
@@ -274,7 +285,6 @@ const CaptureBox = ({ label, field, value, onInput }) => {
   );
 };
 
-// --- Styles (Unchanged) ---
 const containerStyle = { padding: '20px', minHeight: '100vh', background: '#f8fafc' };
 const headerSection = { marginBottom: '30px', borderBottom: '2px solid #e2e8f0', paddingBottom: '15px' };
 const mainTitle = { color: '#0f172a', margin: 0, fontWeight: '900', fontSize: '20px' };
@@ -312,7 +322,6 @@ const footerAction = { display: 'flex', gap: '10px', marginTop: '25px', borderTo
 const submitBtn = { flex: 2, padding: '14px', background: '#059669', color: '#fff', border: 'none', borderRadius: '12px', fontWeight: 'bold', cursor: 'pointer', display:'flex', alignItems:'center', justifyContent:'center', gap:'5px' };
 const cancelBtn = { flex: 1, padding: '14px', background: '#f1f5f9', color: '#64748b', border: 'none', borderRadius: '12px', fontWeight: 'bold', cursor: 'pointer' };
 const statusMsg = { textAlign: 'center', marginTop: '100px', color: '#94a3b8' };
-
 const responsiveCSS = `
   @media (max-width: 600px) {
     .resp-grid { grid-template-columns: 1fr !important; }

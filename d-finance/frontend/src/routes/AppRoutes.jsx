@@ -38,7 +38,8 @@ import MyTeam from '../pages/User/MyTeam';
 // Accountant Pages
 import AccountantApproval from '../pages/Accountant/AccountantApproval'; 
 import PaymentApproval from '../pages/Accountant/PaymentApproval';
-
+import AccountantReports from '../pages/Accountant/AccountantReports';
+import BulkDataTerminal from '../pages/Accountant/BulkDataTerminal';
 
 // Customer Pages
 import CustomerDashboard from "../pages/Customer/CustomerDashboard";
@@ -90,9 +91,12 @@ const AppRoutes = () => {
 
       {/* 5. Accountant Routes */}
       <Route path="/accountant" element={<AccountantLayout />}> 
+      <Route path="/accountant/bulk-data" element={<BulkDataTerminal />} />
+      <Route path="/accountant/reports" element={<AccountantReports />} />
   {/* Yahan se slash hata do */}
   <Route path="approval" element={<AccountantApproval />} /> 
   <Route path="payment-approval" element={<PaymentApproval />} /> 
+  
 </Route>
      
 
