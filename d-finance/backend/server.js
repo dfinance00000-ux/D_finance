@@ -1,3 +1,4 @@
+console.log("🔥 THIS IS ACTIVE SERVER FILE");
 require('dotenv').config(); 
 const express = require('express');
 const connectDB = require('./config/db'); 
@@ -8,9 +9,10 @@ const bcrypt = require('bcryptjs');
 const Loan = require('./models/Loan');
 const Payment = require('./models/Payment'); // 🔥 IMPORTANT
 const Blog = require('./models/Blog');
-
+// const Cashfree = require("cashfree-pg");
 // Models Import
 const User = require('./models/User'); 
+const axios = require("axios");
 // const Loan = require('./models/Loan'); 
 
 const app = express();
@@ -24,8 +26,8 @@ app.use(cors({
   origin: [
     "http://localhost:5173",                   // Local Testing ke liye
     "https://d-finance-izsi.vercel.app",       // Aapka Frontend (Vercel)
-    "https://dfinance.space",
-    "https://www.dfinance.space"               // Aapka Custom Domain (agar hai)
+    // "https://dfinance.space",
+    // "https://www.dfinance.space"               // Aapka Custom Domain (agar hai)
   ],
   methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
   credentials: true,
@@ -786,6 +788,122 @@ app.get('/api/loans/my-payments', verifyToken, async (req, res) => {
 
 // 3. Fix: Accountant Add Karne Ka Logic (Signup Route Update)
 // Note: Aapka existing signup route hi kaam karega, bas dropdown mein 'Accountant' role bhejiye.
+
+app.post('/api/create-order', async (req, res) => {
+
+  try {
+
+    console.log("🔥 CREATE ORDER API HIT");
+    console.log(req.body);
+
+    const {
+      loanId,
+      amount,
+      customerName,
+      customerPhone
+    } = req.body;
+
+    const orderData = {
+
+      order_amount: amount,
+
+      order_currency: "INR",
+
+      order_id: "ORDER_" + Date.now(),
+
+      customer_details: {
+        customer_id: loanId,
+        customer_name: customerName,
+        customer_phone: customerPhone
+      }
+    };
+
+    const response = await axios.post(
+
+      "https://api.cashfree.com/pg/orders",
+
+      orderData,
+
+      {
+        headers: {
+
+          "x-client-id": process.env.CASHFREE_APP_ID,
+
+          "x-client-secret": process.env.CASHFREE_SECRET_KEY,
+
+          "x-api-version": "2022-09-01",
+
+          "Content-Type": "application/json"
+        }
+      }
+    );
+
+    console.log("✅ CASHFREE RESPONSE:");
+    console.log(response.data);
+
+    res.status(200).json(response.data);
+
+  } catch (err) {
+
+    console.log("❌ CASHFREE ERROR:");
+
+    if (err.response) {
+      console.log(err.response.data);
+      return res.status(500).json(err.response.data);
+    }
+
+    console.log(err.message);
+
+    res.status(500).json({
+      error: err.message
+    });
+  }
+});
+
+app.post('/api/cashfree/webhook', async (req, res) => {
+
+  try {
+
+    console.log("Webhook:", req.body);
+
+    const paymentData = req.body.data.payment;
+
+    if (paymentData.payment_status === "SUCCESS") {
+
+      const loanId = paymentData.order.order_id;
+
+      // Payment Save
+      const newPayment = new Payment({
+        paymentId: paymentData.cf_payment_id,
+        loanId: loanId,
+        amount: paymentData.payment_amount,
+        status: "Approved",
+        utr: "CASHFREE"
+      });
+
+      await newPayment.save();
+
+      // Loan Update
+      await Loan.findOneAndUpdate(
+        { loanId: loanId },
+        {
+          $inc: {
+            totalPaid: paymentData.payment_amount,
+            totalPending: -paymentData.payment_amount
+          }
+        }
+      );
+
+      console.log("✅ Payment Auto Approved");
+    }
+
+    res.status(200).send("OK");
+
+  } catch (err) {
+    console.log(err);
+    res.status(500).send("Error");
+  }
+});
 
 // --- START SERVER ---
 const PORT = process.env.PORT || 5000;

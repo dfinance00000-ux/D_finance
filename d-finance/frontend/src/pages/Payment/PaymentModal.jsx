@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import API from '../../api/axios';
+import { load } from "@cashfreepayments/cashfree-js";
 import { FiX, FiShield, FiCamera, FiEdit3, FiHash, FiExternalLink, FiInfo } from 'react-icons/fi';
 
 const PaymentModal = ({ loan, allActiveLoans = [], onClose, onRefresh }) => {
@@ -77,6 +78,66 @@ const PaymentModal = ({ loan, allActiveLoans = [], onClose, onRefresh }) => {
       setLoading(false);
     }
   };
+  const handleCashfreePayment = async () => {
+
+  try {
+
+    if (!manualLoanId) {
+      return alert("⚠️ Loan ID missing");
+    }
+
+    if (!paidAmount || Number(paidAmount) <= 0) {
+      return alert("⚠️ Enter valid amount");
+    }
+
+    setLoading(true);
+
+    // 🔥 Create Order
+    const response = await API.post("/create-order", {
+
+      loanId: manualLoanId,
+
+      amount: Number(paidAmount),
+
+      customerName:
+        user.fullName || user.name || "Customer",
+
+      customerPhone:
+        user.mobile || "9999999999"
+    });
+
+    console.log("✅ ORDER RESPONSE:", response.data);
+
+    // 🔥 Load Cashfree
+    const cashfree = await load({
+      mode: "production"
+    });
+
+    // 🔥 Open Checkout
+    cashfree.checkout({
+
+      paymentSessionId:
+        response.data.payment_session_id,
+
+      redirectTarget: "_modal"
+
+    });
+
+  } catch (err) {
+
+    console.log("❌ PAYMENT ERROR:", err);
+
+    alert(
+      err?.response?.data?.message ||
+      "Payment failed"
+    );
+
+  } finally {
+
+    setLoading(false);
+
+  }
+};
 
   return (
     <div style={overlayStyle}>
