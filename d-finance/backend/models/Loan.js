@@ -7,6 +7,9 @@ const LoanSchema = new mongoose.Schema({
     unique: true, 
     required: [true, "Loan ID is required"] 
   },
+  paymentOrderId: {
+  type: String
+},
   customerId: { 
     type: mongoose.Schema.Types.ObjectId, 
     ref: 'User', 

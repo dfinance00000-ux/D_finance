@@ -96,14 +96,13 @@ const PaymentModal = ({ loan, allActiveLoans = [], onClose, onRefresh }) => {
     const response = await API.post("/create-order", {
 
       loanId: manualLoanId,
-
+      customerId: manualLoanId,
       amount: Number(paidAmount),
-
       customerName:
-        user.fullName || user.name || "Customer",
+      user.fullName || user.name || "Customer",
 
-      customerPhone:
-        user.mobile || "9999999999"
+customerPhone:
+  user.mobile || "9999999999"
     });
 
     console.log("✅ ORDER RESPONSE:", response.data);
