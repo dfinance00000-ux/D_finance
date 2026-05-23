@@ -574,16 +574,29 @@ app.post('/api/accountant/approve/:id', async (req, res) => {
 app.get('/api/payments', async (req, res) => {
   try {
     const { customerId } = req.query;
-    // 💡 Step 1: Check karo 'Payment' model top par require kiya hai?
-    // const Payment = require('./models/Payment');
-    
-    const payments = await Payment.find({ customerId }).sort({ createdAt: -1 });
-    
-    // 💡 Step 2: Hamesha array bhejo, bhale hi khali ho
-    res.status(200).json(payments); 
+
+    if (!customerId) {
+      return res.status(400).json({
+        success: false,
+        message: "customerId required"
+      });
+    }
+
+    const payments = await Payment.find({ customerId })
+      .sort({ createdAt: -1 });
+
+    res.status(200).json({
+      success: true,
+      payments
+    });
+
   } catch (err) {
     console.error("Fetch Error:", err);
-    res.status(500).json([]); // Crash ki jagah empty array bhej do
+
+    res.status(500).json({
+      success: false,
+      payments: []
+    });
   }
 });
 // 🔥 PERMANENT DELETE ROUTE
@@ -892,7 +905,9 @@ app.all('/api/cashfree/webhook', async (req, res) => {
       const customerId =
   req.body?.data?.customer_details?.customer_id;
 
-const loan = await Loan.findById(orderId)
+const loan = await Loan.findOne({
+  cashfreeOrderId: orderId
+});
 
       if (!loan) {
 
