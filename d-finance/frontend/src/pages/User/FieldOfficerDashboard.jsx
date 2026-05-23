@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import API from '../../api/axios'; 
 import { 
   FiZap, FiPieChart, FiRefreshCw, FiPlus, FiBox, 
-  FiCheckCircle, FiClock, FiChevronRight, FiX, FiList, FiMapPin, FiPhone
+  FiChevronRight, FiX, FiList, FiMapPin, FiPhone
 } from 'react-icons/fi';
 
 const FieldOfficerDashboard = () => {
@@ -116,58 +116,64 @@ const FieldOfficerDashboard = () => {
         </div>
         
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
-          {openPool?.slice(0, 6).map((loan) => (
-            <div key={loan.loanId || loan._id} className="bg-white/5 border border-white/10 p-5 sm:p-6 rounded-3xl hover:border-emerald-500/50 transition-all flex flex-col justify-between min-w-0">
-              <div>
-                <div className="flex justify-between items-start mb-4 gap-2">
-                  <div className="text-[9px] font-black px-2 py-1 bg-white/10 rounded-md text-slate-300 uppercase truncate">
-                    {loan.type || loan.emiType || 'Daily EMI'}
+          {openPool?.slice(0, 6).map((loan) => {
+            // 🔥 FIXED CHECK: Lat/Lng string checks to verify true geotag status
+            const hasValidGPS = loan?.coordinates?.lat && loan?.coordinates?.lng && loan.coordinates.lat !== "";
+
+            return (
+              <div key={loan.loanId || loan._id} className="bg-white/5 border border-white/10 p-5 sm:p-6 rounded-3xl hover:border-emerald-500/50 transition-all flex flex-col justify-between min-w-0">
+                <div>
+                  <div className="flex justify-between items-start mb-4 gap-2">
+                    <div className="text-[9px] font-black px-2 py-1 bg-white/10 rounded-md text-slate-300 uppercase truncate">
+                      {loan.type || loan.emiType || 'Daily EMI'}
+                    </div>
+                    <div className="text-emerald-400 font-black text-lg italic tracking-tight shrink-0">
+                      ₹{loan.amount}
+                    </div>
                   </div>
-                  <div className="text-emerald-400 font-black text-lg italic tracking-tight shrink-0">
-                    ₹{loan.amount}
+                  
+                  <h4 className="font-black text-white uppercase truncate text-sm mb-3">
+                    {loan.customerName}
+                  </h4>
+
+                  {/* CONTACT & SECURITY GEOTAG REGISTRY SECTION */}
+                  <div className="flex flex-col gap-2.5 my-4 pt-3 border-t border-white/5">
+                    {/* Phone Number Row */}
+                    <div className="flex items-center gap-2 text-[11px] text-slate-400">
+                      <FiPhone className="text-emerald-400 shrink-0" size={14} />
+                      <span className="font-medium tracking-wider truncate">
+                        {loan?.customerMobile || loan?.customerId?.mobile || "No Number Provided"}
+                      </span>
+                    </div>
+
+                    {/* Dynamic Location / Live Maps Geotag Link - Fixed Syntax Error */}
+                    <div className="flex items-center gap-2 text-[11px] text-slate-400">
+                      <FiMapPin className="text-emerald-400 shrink-0" size={14} />
+                      <span className="font-medium truncate block w-full">
+                        {hasValidGPS ? (
+                          <a 
+                            href={`https://www.google.com/maps?q=${loan.coordinates.lat},${loan.coordinates.lng}`}
+                            target="_blank" 
+                            rel="noopener noreferrer"
+                            className="text-emerald-400 font-bold underline hover:text-emerald-300 transition-all flex items-center gap-1"
+                          >
+                            📍 View Live Geotag Map
+                          </a>
+                        ) : (
+                          /* Fallback to Text Location if GPS is empty string */
+                          loan?.branchName || loan?.locationName || "Location Not Provided"
+                        )}
+                      </span>
+                    </div>
                   </div>
                 </div>
-                
-                <h4 className="font-black text-white uppercase truncate text-sm mb-3">
-                  {loan.customerName}
-                </h4>
 
-                {/* 🔥 REAL COORDINATES FETCH & DATA DISPLAY */}
-                <div className="flex flex-col gap-2.5 my-4 pt-3 border-t border-white/5">
-                  {/* Phone Number Row */}
-                  <div className="flex items-center gap-2 text-[11px] text-slate-400">
-                    <FiPhone className="text-emerald-400 shrink-0" size={14} />
-                    <span className="font-medium tracking-wider truncate">
-                      {loan?.customerMobile || loan?.customerId?.mobile || "No Number Provided"}
-                    </span>
-                  </div>
-
-                  {/* Dynamic Location / Live Maps Geotag Link */}
-                  <div className="flex items-center gap-2 text-[11px] text-slate-400">
-                    <FiMapPin className="text-emerald-400 shrink-0" size={14} />
-                    <span className="font-medium truncate block w-full">
-                      {loan?.coordinates?.lat ? (
-                        <a 
-                          href={`https://www.google.com/maps/search/?api=1&query=${loan.coordinates.lat},${loan.coordinates.lng}`}
-                          target="_blank" 
-                          rel="noopener noreferrer"
-                          className="text-emerald-400 font-bold underline hover:text-emerald-300 transition-colors"
-                        >
-                          📍 View On Google Maps
-                        </a>
-                      ) : (
-                        loan?.locationName || loan?.branchName || "Location Not Available"
-                      )}
-                    </span>
-                  </div>
-                </div>
+                <button onClick={() => handleAcceptLoan(loan.loanId)} className="w-full mt-4 bg-emerald-500 text-slate-900 font-black py-3.5 rounded-xl text-[10px] uppercase shadow-lg active:scale-95 hover:bg-emerald-400 transition-all tracking-wider shrink-0">
+                  Claim Lead
+                </button>
               </div>
-
-              <button onClick={() => handleAcceptLoan(loan.loanId)} className="w-full mt-4 bg-emerald-500 text-slate-900 font-black py-3.5 rounded-xl text-[10px] uppercase shadow-lg active:scale-95 hover:bg-emerald-400 transition-all tracking-wider shrink-0">
-                Claim Lead
-              </button>
-            </div>
-          ))}
+            );
+          })}
         </div>
 
         {(!openPool || openPool.length === 0) && (
