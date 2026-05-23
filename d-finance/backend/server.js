@@ -772,22 +772,17 @@ app.post('/api/create-order', async (req, res) => {
     // 🔥 REAL LOAN ID USE KARO
     const orderData = {
 
-      order_amount: Number(amount),
+  order_amount: amount,
 
-      order_currency: "INR",
+  order_currency: "INR",
 
-      // IMPORTANT
-      order_id: loanId,
+  order_id: loanId,
 
-      customer_details: {
-
-        // IMPORTANT
-        customer_id: loanId,
-
-        customer_name: customerName,
-
-        customer_phone: customerPhone
-      }
+  customer_details: {
+    customer_id: loanId,
+    customer_name: customerName,
+    customer_phone: customerPhone
+  }
     };
 
     const response = await axios.post(
@@ -896,7 +891,7 @@ app.all('/api/cashfree/webhook', async (req, res) => {
   req.body?.data?.customer_details?.customer_id;
 
 const loan = await Loan.findOne({
-  customerId: customerId
+  loanId: orderId
 });
 
       if (!loan) {
