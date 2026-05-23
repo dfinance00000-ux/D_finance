@@ -574,16 +574,16 @@ app.post('/api/accountant/approve/:id', async (req, res) => {
 app.get('/api/payments', async (req, res) => {
   try {
     const { customerId } = req.query;
-    // 💡 Step 1: Check karo 'Payment' model top par require kiya hai?
-    // const Payment = require('./models/Payment');
-    
-    const payments = await Payment.find({ customerId }).sort({ createdAt: -1 });
-    
-    // 💡 Step 2: Hamesha array bhejo, bhale hi khali ho
-    res.status(200).json(payments); 
+
+    const payments = await Payment.find({
+      customerId
+    }).sort({ createdAt: -1 });
+
+    return res.status(200).json(payments);
+
   } catch (err) {
     console.error("Fetch Error:", err);
-    res.status(500).json([]); // Crash ki jagah empty array bhej do
+    return res.status(200).json([]);
   }
 });
 // 🔥 PERMANENT DELETE ROUTE
@@ -755,220 +755,167 @@ app.get('/api/loans/my-payments', verifyToken, async (req, res) => {
 // 3. Fix: Accountant Add Karne Ka Logic (Signup Route Update)
 // Note: Aapka existing signup route hi kaam karega, bas dropdown mein 'Accountant' role bhejiye.
 
-app.post('/api/create-order', async (req, res) => {
+app.post("/api/create-order", async (req, res) => {
 
   try {
 
-    console.log("🔥 CREATE ORDER API HIT");
-    console.log(req.body);
-
     const {
       loanId,
+      customerId,
       amount,
       customerName,
       customerPhone
     } = req.body;
 
-    // 🔥 REAL LOAN ID USE KARO
-    const orderData = {
+    if (!loanId) {
+      return res.status(400).json({
+        success: false,
+        message: "Loan ID missing"
+      });
+    }
 
-  order_amount: amount,
+    const loan = await Loan.findById(loanId);
 
-  order_currency: "INR",
+    if (!loan) {
+      return res.status(404).json({
+        success: false,
+        message: "Loan not found"
+      });
+    }
 
-order_id: loan._id.toString(),
-customer_id: loan.customerId.toString(),
+    const orderId =
+      `CFPay_${loanId}_${Date.now()}`;
 
-  customer_details: {
-    customer_id: loanId,
-    customer_name: customerName,
-    customer_phone: customerPhone
-  }
+    const request = {
+      order_amount: amount,
+      order_currency: "INR",
+      order_id: orderId,
+
+      customer_details: {
+        customer_id: customerId,
+        customer_name: customerName,
+        customer_phone: customerPhone
+      },
+
+      order_meta: {
+        return_url:
+          "https://dfinance.space/customer/dashboard"
+      }
     };
 
-    const response = await axios.post(
+    const response =
+      await cashfree.PGCreateOrder("2023-08-01", request);
 
-      "https://api.cashfree.com/pg/orders",
-      orderData,
+    await Payment.create({
 
-      {
-        headers: {
+      loanId,
+      customerId,
 
-          "x-client-id": process.env.CASHFREE_APP_ID,
+      cashfreeOrderId: orderId,
 
-          "x-client-secret": process.env.CASHFREE_SECRET_KEY,
+      amount,
 
-          "x-api-version": "2022-09-01",
+      status: "PENDING",
 
-          "Content-Type": "application/json"
-        }
-      }
-    );
+      paymentMethod: "CASHFREE"
 
-    console.log("✅ CASHFREE RESPONSE:");
-    console.log(response.data);
+    });
 
-    return res.status(200).json(response.data);
+    res.json({
+      success: true,
+      payment_session_id:
+        response.data.payment_session_id
+    });
 
   } catch (err) {
 
-    console.log("❌ CASHFREE ERROR:");
+    console.log(err);
 
-    if (err.response) {
-      console.log(err.response.data);
-
-      return res.status(500).json(err.response.data);
-    }
-
-    console.log(err.message);
-
-    return res.status(500).json({
-      error: err.message
+    res.status(500).json({
+      success: false,
+      message: "Order creation failed"
     });
   }
 });
 
-app.all('/api/cashfree/webhook', async (req, res) => {
+app.post("/api/cashfree/webhook", async (req, res) => {
 
   try {
-    const data = req.body.data;
 
     console.log("🔥 CASHFREE WEBHOOK HIT");
 
-    console.log("METHOD:", req.method);
+    const data = req.body?.data;
 
-    console.log("BODY:", JSON.stringify(req.body, null, 2));
-
-    if (req.method === "GET") {
-
-      return res.status(200).json({
-        success: true,
-        message: "Webhook Active"
+    if (!data) {
+      return res.status(400).json({
+        success: false
       });
     }
 
-    // 🔥 FIXED
-    const paymentData = req.body?.data?.payment;
+    const orderId =
+      data.order.order_id;
 
-    const orderData = req.body?.data?.order;
+    const paymentStatus =
+      data.payment.payment_status;
 
-    if (!paymentData || !orderData) {
+    console.log("ORDER ID:", orderId);
+    console.log("STATUS:", paymentStatus);
 
-      console.log("⚠️ Invalid payload");
+    const payment =
+      await Payment.findOne({
+        cashfreeOrderId: orderId
+      });
 
-      return res.status(200).json({
-        success: true
+    if (!payment) {
+
+      console.log("❌ Payment not found");
+
+      return res.status(404).json({
+        success: false,
+        message: "Payment not found"
       });
     }
 
-    console.log("💰 PAYMENT STATUS:", paymentData.payment_status);
+    const loan =
+      await Loan.findById(payment.loanId);
 
-    if (paymentData.payment_status === "SUCCESS") {
+    if (!loan) {
 
-      // 🔥 FIXED
-      const orderId = orderData.order_id;
-      console.log("ORDER ID:", orderId);
-      console.log("CUSTOMER ID:", req.body?.data?.customer_details?.customer_id);
+      console.log("❌ Loan not found");
 
-      const amount = Number(paymentData.payment_amount || 0);
-
-      console.log("✅ SUCCESS PAYMENT FOR:", orderId);
-
-      // DUPLICATE CHECK
-      const existingPayment = await Payment.findOne({
-        paymentId: String(paymentData.cf_payment_id)
+      return res.status(404).json({
+        success: false,
+        message: "Loan not found"
       });
+    }
 
-      if (existingPayment) {
+    if (paymentStatus === "SUCCESS") {
 
-        console.log("⚠️ Duplicate payment ignored");
+      payment.status = "SUCCESS";
 
-        return res.status(200).json({
-          success: true
-        });
+      payment.cfPaymentId =
+        data.payment.cf_payment_id;
+
+      payment.paymentTime =
+        data.payment.payment_time;
+
+      await payment.save();
+
+      loan.totalPaid =
+        (loan.totalPaid || 0) +
+        payment.amount;
+
+      loan.remainingAmount =
+        (loan.remainingAmount || loan.loanAmount)
+        - payment.amount;
+
+      if (loan.remainingAmount <= 0) {
+        loan.loanStatus = "COMPLETED";
       }
 
-      // FIND LOAN
-      const customerId =
-  req.body?.data?.customer_details?.customer_id;
+      await loan.save();
 
-const loan = await Loan.findOne({
-  cashfreeOrderId: orderId
-});
-
-      if (!loan) {
-
-        console.log("❌ Loan not found");
-
-        return res.status(404).json({
-          error: "Loan not found"
-        });
-      }
-
-      console.log("✅ Loan Found:", loan.loanId);
-
-      // SAVE PAYMENT
-      const newPayment = new Payment({
-
-        paymentId: String(paymentData.cf_payment_id),
-
-        loanId: loan.loanId,
-
-        customerId: loan.customerId,
-
-        customerName: loan.customerName,
-
-        amount: amount,
-
-        status: "Approved",
-
-        utr:
-          paymentData.bank_reference || "CASHFREE",
-
-        paymentMethod: "ONLINE",
-
-        customerPhone:
-          req.body?.data?.customer_details?.customer_phone || "",
-
-        verifiedAt: new Date()
-      });
-
-      await newPayment.save();
-
-      console.log("✅ Payment Saved");
-
-      // UPDATE LOAN
-      const updatedLoan = await Loan.findOneAndUpdate(
-
-        { loanId: loan.loanId },
-
-        {
-          $inc: {
-            totalPaid: amount,
-            totalPending: -amount
-          }
-        },
-
-         { returnDocument: "after" }
-
-      );
-
-      console.log("✅ Loan Updated");
-
-      // AUTO CLOSE
-      if (
-        updatedLoan &&
-        updatedLoan.totalPending <= 0
-      ) {
-
-        updatedLoan.status = "Paid";
-
-        await updatedLoan.save();
-
-        console.log("🎉 Loan Fully Paid");
-      }
-
-      console.log("✅ PAYMENT AUTO APPROVED");
+      console.log("✅ PAYMENT SUCCESS");
     }
 
     return res.status(200).json({
@@ -977,12 +924,10 @@ const loan = await Loan.findOne({
 
   } catch (err) {
 
-    console.log("❌ WEBHOOK ERROR:");
-
-    console.log(err);
+    console.log("❌ WEBHOOK ERROR:", err);
 
     return res.status(500).json({
-      error: err.message
+      success: false
     });
   }
 });
