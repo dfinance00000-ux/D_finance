@@ -776,7 +776,8 @@ app.post('/api/create-order', async (req, res) => {
 
   order_currency: "INR",
 
-  order_id: loan.loanId,
+order_id: loan._id.toString(),
+customer_id: loan.customerId.toString(),
 
   customer_details: {
     customer_id: loanId,
@@ -830,6 +831,7 @@ app.post('/api/create-order', async (req, res) => {
 app.all('/api/cashfree/webhook', async (req, res) => {
 
   try {
+    const data = req.body.data;
 
     console.log("🔥 CASHFREE WEBHOOK HIT");
 
@@ -890,9 +892,7 @@ app.all('/api/cashfree/webhook', async (req, res) => {
       const customerId =
   req.body?.data?.customer_details?.customer_id;
 
-const loan = await Loan.findOne({
-  loanId: data.order.order_id 
-});
+const loan = await Loan.findById(orderId)
 
       if (!loan) {
 
