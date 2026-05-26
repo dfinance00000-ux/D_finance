@@ -5,8 +5,8 @@ const isLocal = window.location.hostname === 'localhost' || window.location.host
 
 const API = axios.create({
   // 🔥 AUTO-SWITCH MATRIX: Ab aapko baar-baar comment/uncomment nahi karna padega
-  // baseURL: 'https://dfinance.space/api',
-  baseURL: 'https://d-finance-backend.onrender.com/api',
+  baseURL: 'https://dfinance.space/api',
+  // baseURL: 'https://d-finance-backend.onrender.com/api',
   withCredentials: true,
   timeout: 60000,
 });
