@@ -47,7 +47,7 @@ import LoanApply from "../pages/Loan/ApplyLoan";
 import LoanTracking from "../pages/Customer/LoanTracking"; 
 import EMIPayments from "../pages/Customer/EMIPayments";
 import PaymentHistory from '../pages/Customer/PaymentHistory';
-
+import BlogsPage from '../pages/BlogsPage';
 // ... Routes ke andar
 
 const AppRoutes = () => {
@@ -59,6 +59,7 @@ const AppRoutes = () => {
       {/* 2. Auth Routes */}
       <Route path="/login" element={<Login />} />
       <Route path="/signup" element={<Signup />} />
+      <Route path="/blogs" element={<BlogsPage />} />
 
       {/* 3. Admin Routes (Mathura Branch Control) */}
       <Route path="/admin" element={<AdminLayout />}>

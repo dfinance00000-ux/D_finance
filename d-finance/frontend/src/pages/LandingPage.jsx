@@ -4,7 +4,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import API from '../api/axios';
 import { 
   FiArrowRight, FiShield, FiZap, FiChevronRight, FiCheck, 
-  FiCpu, FiActivity, FiLayers, FiMenu, FiX, FiLock, FiStar, FiTrendingUp 
+  FiCpu, FiActivity, FiLayers, FiMenu, FiX, FiLock, FiStar, FiPhone, FiMail, FiMapPin 
 } from 'react-icons/fi';
 
 const LandingPage = () => {
@@ -112,28 +112,112 @@ const LandingPage = () => {
 
       {/* --- 💎 CAPABILITIES --- */}
       <section id="architecture" style={sectionContainer('#fff')}>
-        <div style={centeredHeader}>
-          <div style={sectionBadge}>CAPABILITIES</div>
-          <h2 style={sectionTitle}>The Architecture of Trust</h2>
-        </div>
-        <div className="feature-grid" style={gridContainer}>
-          <FeatureCard icon={<FiShield />} title="Verification" desc="Aadhaar-linked field audit system." benefit="Faster Approvals" color="#2563eb" />
-          <FeatureCard icon={<FiActivity />} title="WCE Logic" desc="Weekly collection efficiency engine." benefit="Zero Manual Error" color="#10b981" />
-          <FeatureCard icon={<FiCpu />} title="Smart Ledgers" desc="Real-time amortization automation." benefit="100% Transparency" color="#6366f1" />
-        </div>
-      </section>
+  <div style={centeredHeader}>
+    <div style={sectionBadge}>PLATFORM ARCHITECTURE</div>
+    <h2 style={sectionTitle}>Enterprise-Grade Financial Infrastructure</h2>
+    <p style={{...cardP, maxWidth: '600px', margin: '20px auto'}}>
+      We provide a unified ecosystem that secures every transaction node, ensuring operational transparency from disbursement to final settlement.
+    </p>
+  </div>
 
-      {/* --- ⭐ TESTIMONIALS --- */}
-      <section style={testimonialSectionStyle}>
-        <div style={centeredHeader}>
-          <div style={sectionBadge}>REVIEWS</div>
-          <h2 style={sectionTitle}>Success Stories</h2>
-        </div>
-        <div className="feature-grid" style={gridContainer}>
-          <TestimonialCard name="Aman Singh" role="Manager, Mathura Branch" text="D-Finance changed how we track recoveries. Our WCE improved by 40% in two months." />
-          <TestimonialCard name="Priya Verma" role="Financial Analyst" text="The real-time ledger sync is life-saving for audits. Pure institutional level tech." />
-        </div>
-      </section>
+  <div className="feature-grid" style={gridContainer}>
+    <FeatureCard 
+      icon={<FiShield />} 
+      title="Identity & Audit" 
+      desc="Aadhaar-linked biometric and KYC verification combined with real-time field audit trails." 
+      benefit="Fraud-Proof Onboarding" 
+      color="#2563eb" 
+    />
+    <FeatureCard 
+      icon={<FiActivity />} 
+      title="Efficiency Engine" 
+      desc="Automated Weekly Collection Efficiency (WCE) logic that flags defaults before they escalate." 
+      benefit="Predictive Recovery" 
+      color="#10b981" 
+    />
+    <FeatureCard 
+      icon={<FiCpu />} 
+      title="Ledger Automation" 
+      desc="Real-time amortization schedules and instant balance updates across all user nodes." 
+      benefit="100% Transparency" 
+      color="#6366f1" 
+    />
+    
+  </div>
+</section>
+{/* --- 👑 FOUNDING LEADERSHIP --- */}
+<section style={testimonialSectionStyle}>
+  <div style={centeredHeader}>
+    <div style={sectionBadge}>FOUNDERS</div>
+    <h2 style={sectionTitle}>Visionary Leadership</h2>
+    <p style={{...cardP, maxWidth: '600px', margin: '20px auto'}}>
+      The minds driving D-Finance towards financial inclusion and operational excellence.
+    </p>
+  </div>
+  
+  <div className="feature-grid" style={gridContainer}>
+    
+    {/* Dhiraj Sharma Card */}
+    <div style={glassFeature}>
+       <img src="/dhiraj-sharma.jpg" alt="Dhiraj Sharma" style={avatarStyle} />
+       <h4 style={cardH3}>Dhiraj Sharma</h4>
+       <p style={{fontSize: '12px', fontWeight: '900', color: '#6366f1', marginBottom: '10px'}}>CO-FOUNDER & DIRECTOR</p>
+       <a href="tel:+918935060000" style={contactLink}><FiPhone size={12}/> +91 89350 60000</a>
+       <p style={cardP}>Architecting the future of secure, real-time micro-finance ledgers.</p>
+    </div>
+
+    {/* Pawan Sharma Card */}
+    <div style={glassFeature}>
+       <img src="/pawan-sharma.jpg" alt="Pawan Sharma" style={avatarStyle} />
+       <h4 style={cardH3}>Pawan Sharma</h4>
+       <p style={{fontSize: '12px', fontWeight: '900', color: '#10b981', marginBottom: '10px'}}>Team Manager</p>
+       <a href="tel:+919151363738" style={contactLink}><FiPhone size={12}/> +91 91513 63738</a>
+       <p style={cardP}>Standardizing operations through automated WCE logic and field audit protocols.</p>
+    </div>
+     {/* Pradeep Sharma Card */}
+    <div style={glassFeature}>
+       <img src="/pradeep-sharma.jpg" alt="Pradeep Sharma" style={avatarStyle} />
+       <h4 style={cardH3}>Pradeep Sharma</h4>
+       <p style={{fontSize: '12px', fontWeight: '900', color: '#6366f1', marginBottom: '10px'}}>Oprational and Financial Manager</p>
+       <a href="tel:+917409234299" style={contactLink}><FiPhone size={12}/> +91 74092 34299</a>
+       <p style={cardP}>Standardizing operations through automated WCE logic and field audit protocols.</p>
+
+    </div>
+
+
+  </div>
+</section>
+
+      {/* --- 🤝 INVESTOR & LEGAL ADVISORY --- */}
+<section style={testimonialSectionStyle}>
+  <div style={centeredHeader}>
+    <div style={sectionBadge}>GOVERNANCE</div>
+    <h2 style={sectionTitle}>Leadership & Compliance</h2>
+    <p style={{...cardP, maxWidth: '600px', margin: '20px auto'}}>
+      Backed by industry veterans and governed by strict legal adherence.
+    </p>
+  </div>
+  
+  <div className="feature-grid" style={gridContainer}>
+    {/* Investor Card */}
+    <div style={glassFeature}>
+      <img src="/sonu.png" alt="Legal" style={avatarStyle} />
+       <h4 style={cardH3}>Mr. Sonu </h4>
+       <p style={{fontSize: '12px', fontWeight: '900', color: '#3b82f6', marginBottom: '10px'}}>LEAD INVESTOR</p>
+       <a href="tel:+918057285030" style={contactLink}><FiPhone size={12}/> +91 80572 85030</a>
+       <p style={cardP}>Strategic growth partner focusing on digital credit infrastructure.</p>
+    </div>
+
+    {/* Legal Team Card */}
+    <div style={glassFeature}>
+       <img src="/legal.png" alt="Legal" style={avatarStyle} />
+       <h4 style={cardH3}>Advocate Mehraj khan</h4>
+       <p style={{fontSize: '12px', fontWeight: '900', color: '#10b981', marginBottom: '10px'}}>LEGAL & COMPLIANCE HEAD</p>
+       <a href="tel:+919286965562" style={contactLink}><FiPhone size={12}/> +91 92869 65562</a>
+       <p style={cardP}>Ensuring 100% adherence to D Finance SOPs and financial regulations.</p>
+    </div>
+  </div>
+</section>
 
       {/* --- 🧠 INTELLIGENCE --- */}
       <section id="intelligence" style={sectionContainer('#f8fafc')}>
@@ -164,19 +248,32 @@ const LandingPage = () => {
       </section>
 
       {/* --- FOOTER --- */}
-      <footer style={footerStyle}>
+      v<footer style={footerStyle}>
         <div style={footerMain}>
           <div style={fBrandStyle}>
             <h2 style={fLogo}>D-FINANCE</h2>
-            <p style={fText}>Governed by Federal SOP standards. SECURE-NODE-2026.</p>
+            <p style={fText}>
+    Empowering credit institutions with enterprise-grade infrastructure. 
+    Governed by Federal SOP standards, we ensure end-to-end data integrity, 
+    real-time ledger synchronization, and robust algorithmic risk assessment. 
+    <br/><br/>
+    <strong>SECURE-NODE-2026</strong> | AES-256 Encrypted Infrastructure.
+  </p>
           </div>
-          <div style={fLinksGroupStyle}>
-            <div style={fColumnStyle}><h4 style={fHeadingStyle}>Platform</h4><p style={fLinkStyle}>API Docs</p><p style={fLinkStyle}>Status</p></div>
-            <div style={fColumnStyle}><h4 style={fHeadingStyle}>Legal</h4><p style={fLinkStyle}>Privacy Policy</p><p style={fLinkStyle}>Terms</p></div>
+          <div style={fColumnStyle}>
+            <h4 style={fHeadingStyle}>Contact Node</h4>
+            <a href="tel:+918935060000" style={fLinkStyle}><FiPhone size={14}/> +91 89350 60000</a>
+            <a href="mailto:dfinance00000@gmail.com" style={fLinkStyle}><FiMail size={14}/> dfinance00000@gmail.com</a>
+            <p style={fLinkStyle}><FiMapPin size={14}/> Prayagraj Branch, UP</p>
+          </div>
+          <div style={fColumnStyle}>
+            <h4 style={fHeadingStyle}>Platform</h4>
+            <p style={fLinkStyle}>API Documentation</p>
+            <p style={fLinkStyle}>Compliance</p>
           </div>
         </div>
         <div style={fBottom}>
-          <p>© 2026 D-Finance Enterprise. 256-bit AES Encrypted.</p>
+          <p>© 2026 D-Finance Enterprise. All rights reserved.</p>
         </div>
       </footer>
     </div>
@@ -306,7 +403,13 @@ const mobileDropdownStyle = { position: 'fixed', inset: 0, background: '#0f172a'
 const mobLink = { textDecoration: 'none', color: '#fff', fontSize: '24px', fontWeight: '900' };
 const mobBtn = { ...mobLink, color: '#3b82f6' };
 const noData = { textAlign: 'center', padding: '60px', color: '#cbd5e1', fontWeight: '900', width: '100%' };
-
+const avatarStyle = { 
+  width: '80px', height: '80px', borderRadius: '50%', marginBottom: '20px', border: '3px solid #f1f5f9' 
+};
+const contactLink = { 
+  display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', 
+  fontWeight: '800', color: '#0f172a', textDecoration: 'none', marginBottom: '10px' 
+};
 const animations = `
   @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800;900&display=swap');
   body { scroll-behavior: smooth; margin: 0; }
