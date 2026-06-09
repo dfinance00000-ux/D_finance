@@ -1,52 +1,66 @@
 console.log("🔥 THIS IS ACTIVE SERVER FILE");
 
-// 1. Core Modules (Sirf ek baar)
-require('dotenv').config();
-const express = require('express');
-const cors = require('cors');
-const connectDB = require('./config/db');
-const adminRoutes = require('./routes/adminRoutes'); // File ka exact naam likho
-// 1. Import (V6 SDK ke liye)
-const { Cashfree } = require('cashfree-pg');
+// ====================================
+// ENV CONFIG
+// ====================================
+require("dotenv").config();
 
-// 2. IMPORTANT: Cashfree ka main object initialize karo
-// SDK v6 mein Cashfree variable khud ek object hai, 'new' use karne ki zarurat nahi hai
-const cf = Cashfree; 
-
-// 3. Properties set karo
-cf.XClientId = process.env.CASHFREE_APP_ID;
-cf.XClientSecret = process.env.CASHFREE_SECRET_KEY;
-// cf.XEnvironment = Cashfree.CFEnvironment.PRODUCTION; 
-Cashfree.XEnvironment = "PRODUCTION";
-
-// Ab `cf` ko use karo
-
-// Route mein call:
-
-// 3. Initialize Cashfree (Production Setup)
-Cashfree.XClientId = process.env.CASHFREE_APP_ID;
-Cashfree.XClientSecret = process.env.CASHFREE_SECRET_KEY;
-// Cashfree.XEnvironment = Cashfree.Environment.PRODUCTION;
-Cashfree.XEnvironment = "PRODUCTION";
-
-// 4. Models (Jo aapne import kiye the)
-const Loan = require('./models/Loan');
-const Payment = require('./models/Payment');
-const Blog = require('./models/Blog');
-const User = require('./models/User');
-
-// 5. Utility
+// ====================================
+// CORE PACKAGES
+// ====================================
+const express = require("express");
+const cors = require("cors");
 const axios = require("axios");
-const jwt = require('jsonwebtoken');
-const bcrypt = require('bcryptjs');
+const jwt = require("jsonwebtoken");
+const bcrypt = require("bcryptjs");
 
-// 6. App & Middlewares
+// ====================================
+// DATABASE
+// ====================================
+const connectDB = require("./config/db");
+
+// ====================================
+// ROUTES
+// ====================================
+const adminRoutes = require("./routes/adminRoutes");
+const paymentRoutes = require("./routes/paymentRoutes");
+console.log("✅ Payment Routes Loaded");
+
+// ====================================
+// CASHFREE
+// ====================================
+const { Cashfree } = require("cashfree-pg");
+
+Cashfree.XClientId =
+  process.env.CASHFREE_APP_ID;
+
+Cashfree.XClientSecret =
+  process.env.CASHFREE_SECRET_KEY;
+
+Cashfree.XEnvironment = "PRODUCTION";
+
+// ====================================
+// MODELS
+// ====================================
+const Loan = require("./models/Loan");
+const Payment = require("./models/Payment");
+const Blog = require("./models/Blog");
+const User = require("./models/User");
+
+// ====================================
+// EXPRESS APP
+// ====================================
 const app = express();
 
-// Database Connection
+// ====================================
+// DATABASE CONNECTION
+// ====================================
 connectDB();
 
-// CORS Settings
+// ====================================
+// MIDDLEWARES
+// ====================================
+
 app.use(cors({
   origin: [
     "http://localhost:5173",
@@ -54,30 +68,43 @@ app.use(cors({
     "https://dfinance.space",
     "https://www.dfinance.space"
   ],
-  methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
   credentials: true,
-  allowedHeaders: ["Content-Type", "Authorization"]
+  methods: [
+    "GET",
+    "POST",
+    "PUT",
+    "PATCH",
+    "DELETE",
+    "OPTIONS"
+  ]
 }));
 
-// Body Parser
-app.use(express.json({ limit: '50mb' }));
-app.use(express.urlencoded({ limit: '50mb', extended: true }));
+app.use(express.json({
+  limit: "50mb"
+}));
 
-// Preflight Request Handler
-app.use((req, res, next) => {
-  res.header("Access-Control-Allow-Origin", req.headers.origin); // Dynamic origin allow karein
-  res.header("Access-Control-Allow-Credentials", "true");
-  res.header("Access-Control-Allow-Headers", "Origin, X-Requested-With, Content-Type, Accept, Authorization");
-  res.header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
-  
-  if (req.method === 'OPTIONS') {
-    return res.sendStatus(200); // Pre-flight request ko turant allow karein
-  }
-  next();
-});
+app.use(express.urlencoded({
+  extended: true,
+  limit: "50mb"
+}));
 
-console.log("✅ Server configuration initialized successfully.");
+// ====================================
+// ROUTES
+// ====================================
 
+app.use(
+  "/api/payments",
+  paymentRoutes
+);
+
+app.use(
+  "/api/admin",
+  adminRoutes
+);
+
+console.log(
+  "✅ Server configuration initialized successfully"
+);
 // --- 2. AUTH MIDDLEWARE ---
 const verifyToken = (req, res, next) => {
     const token = req.headers['authorization']?.split(' ')[1];
@@ -808,42 +835,7 @@ app.get('/admin/daily-summary', async (req, res) => {
 
 // server.js mein
 // server.js mein route update karo
-app.post('/api/create-order', async (req, res) => {
-    try {
-        const { amount, customer_id, customer_phone } = req.body;
-        const request = {
-            order_amount: Number(amount),
-            order_currency: "INR",
-            order_id: `ORD_${Date.now()}`,
-            customer_details: {
-                customer_id: customer_id,
-                customer_phone: customer_phone
-            }
-        };
 
-        // SDK Version 5+ ka sahi method call
-        const response = await Cashfree.PGCreateOrder("2023-08-01", request);
-        res.json({ success: true, payment_session_id: response.data.payment_session_id });
-    } catch (error) {
-        console.error("❌ SDK Error:", error.response?.data || error.message);
-        res.status(500).json({ success: false, message: "Payment failed" });
-    }
-});
-console.log("Available Methods:", Object.keys(cf));
-
-app.post('/api/webhook', (req, res) => {
-    try {
-        const signature = req.headers["x-webhook-signature"];
-        // Secret Key se signature verify karna zaroori hai
-        Cashfree.PGVerifyWebhookSignature(JSON.stringify(req.body), signature, process.env.CASHFREE_SECRET_KEY);
-        
-        // Yahan DB Update logic likhein (Payment Success status)
-        console.log("✅ Webhook Received:", req.body.data.payment.payment_status);
-        res.status(200).send("OK");
-    } catch (err) {
-        res.status(400).send("Invalid Signature");
-    }
-});
 // --- START SERVER ---
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => console.log(`🚀 D-Finance Engine Running on Port ${PORT}`));

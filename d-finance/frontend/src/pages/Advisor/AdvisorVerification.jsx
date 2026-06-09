@@ -1,8 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import API from '../../api/axios';
 import { 
-  FiCamera, FiX, FiUser, FiHome, FiShield, FiBriefcase, 
-  FiCreditCard, FiMapPin, FiInfo, FiUsers, FiPhone, FiArrowRight, FiArrowLeft
+  FiLock, FiUser, FiSearch, FiActivity, FiHome, FiShield, FiUsers, FiCamera, FiArrowRight, FiPhone, FiX 
 } from 'react-icons/fi';
 
 const AdvisorVerification = () => {
@@ -182,57 +181,74 @@ const AdvisorVerification = () => {
           )}
         </div>
       ) : (
-        <div style={modalOverlay}>
-          <div style={modalContent}>
-            <div style={modalHeader}>
-              <div>
-                 <span style={{fontSize:'10px'}}>PAGE {step} / 3</span>
-                 <h3 style={{ margin: 0 }}>{selectedLoan.customerName}</h3>
-              </div>
-              <FiX onClick={() => setSelectedLoan(null)} style={{cursor:'pointer', fontSize:'22px'}} />
-            </div>
+        <div style={modalContent}>
+  <div style={modalHeader}>
+    <div>
+      <span style={{ fontSize: '10px' }}>AUDIT PROCESS: STEP {step} / 5</span>
+      <h3 style={{ margin: 0 }}>{selectedLoan.customerName}</h3>
+    </div>
+    <FiX onClick={() => setSelectedLoan(null)} style={{ cursor: 'pointer', fontSize: '22px' }} />
+  </div>
 
-            <div style={stepperBar}>
-                <div style={{...stepDot, background: step >= 1 ? '#2563eb' : '#e2e8f0'}}></div>
-                <div style={{...stepLine, background: step >= 2 ? '#2563eb' : '#e2e8f0'}}></div>
-                <div style={{...stepDot, background: step >= 2 ? '#2563eb' : '#e2e8f0'}}></div>
-                <div style={{...stepLine, background: step >= 3 ? '#2563eb' : '#e2e8f0'}}></div>
-                <div style={{...stepDot, background: step >= 3 ? '#2563eb' : '#e2e8f0'}}></div>
-            </div>
-            
-            <div style={formScroll}>
-              {step === 1 && (
-                <div className="animate-fade">
-                    <h4 style={sectionTitle}><FiHome /> 1. Profile & Income</h4>
-                    <div className="resp-grid" style={formGrid}>
-                        <SelectField label="House Type *" options={['CONCRETE', 'KUTCHA', 'TILED', 'HUT']} value={fieldForm.houseType} onChange={v => setFieldForm({...fieldForm, houseType: v})} />
-                        <SelectField label="Area Type *" options={['RURAL', 'URBAN', 'SEMI-URBAN']} value={fieldForm.areaType} onChange={v => setFieldForm({...fieldForm, areaType: v})} />
-                        <InputField label="Monthly Income *" type="number" value={fieldForm.monthlyIncome} onChange={v => setFieldForm({...fieldForm, monthlyIncome: v})} />
-                        <InputField label="Occupation *" value={fieldForm.memberOccupation} onChange={v => setFieldForm({...fieldForm, memberOccupation: v})} />
-                    </div>
-                    <h4 style={sectionTitle}><FiShield /> 4. Bank Account Verification</h4>
-                    <div className="resp-grid" style={formGrid}>
-                        <InputField label="A/C Holder" value={fieldForm.accountHolderName} readOnly />
-                        <InputField label="A/C Number" value={fieldForm.bankAccountNumber} readOnly />
-                    </div>
-                </div>
-              )}
+  {/* 5-Step Progress Stepper */}
+  <div style={stepperBar}>
+    {[1, 2, 3, 4, 5].map((s) => (
+      <React.Fragment key={s}>
+        <div style={{ ...stepDot, background: step >= s ? '#2563eb' : '#e2e8f0' }}></div>
+        {s < 5 && <div style={{ ...stepLine, background: step > s ? '#2563eb' : '#e2e8f0' }}></div>}
+      </React.Fragment>
+    ))}
+  </div>
 
-              {step === 2 && (
-                <div className="animate-fade">
-                    <h4 style={sectionTitle}><FiUsers /> 2. Nominee Details</h4>
-                    <div className="resp-grid" style={formGrid}>
-                        <InputField label="Nominee Name *" value={fieldForm.nomineeName} onChange={v => setFieldForm({...fieldForm, nomineeName: v})} />
-                        <InputField label="Nominee Mobile *" type="number" value={fieldForm.nomineeMobile} onChange={v => setFieldForm({...fieldForm, nomineeMobile: v})} />
-                        <InputField label="Nominee UID *" type="number" value={fieldForm.nomineeUID} onChange={v => setFieldForm({...fieldForm, nomineeUID: v})} />
-                        <SelectField label="Relationship *" options={['SPOUSE', 'FATHER', 'MOTHER', 'SON', 'DAUGHTER', 'BROTHER']} value={fieldForm.nomineeRelation} onChange={v => setFieldForm({...fieldForm, nomineeRelation: v})} />
-                    </div>
-                </div>
-              )}
+  <div style={formScroll}>
+    {/* STEP 1: HOUSEHOLD & FAMILY */}
+    {step === 1 && (
+      <div className="animate-fade">
+        <h4 style={sectionTitle}><FiHome /> 1. Family & House Profile</h4>
+        <div className="resp-grid" style={formGrid}>
+          <InputField label="No. of Members *" type="number" value={fieldForm.noOfMembers} onChange={v => setFieldForm({...fieldForm, noOfMembers: v})} />
+          <InputField label="Earning Members *" type="number" value={fieldForm.earningMembers} onChange={v => setFieldForm({...fieldForm, earningMembers: v})} />
+          <InputField label="No. of Rooms *" type="number" value={fieldForm.noOfRooms} onChange={v => setFieldForm({...fieldForm, noOfRooms: v})} />
+          <InputField label="Stay Duration (Yrs) *" type="number" value={fieldForm.houseStay} onChange={v => setFieldForm({...fieldForm, houseStay: v})} />
+          <SelectField label="House Type *" options={['CONCRETE', 'KUTCHA', 'TILED', 'HUT', 'OTHER']} value={fieldForm.houseType} onChange={v => setFieldForm({...fieldForm, houseType: v})} />
+          <SelectField label="Water Source *" options={['PIPED', 'BOREWELL', 'SHARED BOREWELL', 'GOVT BOREWELL', 'OPEN WELL']} value={fieldForm.drinkingWater} onChange={v => setFieldForm({...fieldForm, drinkingWater: v})} />
+        </div>
+      </div>
+    )}
 
-              {/* PAGE 3: KYC EVIDENCE */}
-              {step === 3 && (
-                <div className="animate-fade">
+    {/* STEP 2: ASSETS & FINANCIALS */}
+    {step === 2 && (
+      <div className="animate-fade">
+        <h4 style={sectionTitle}><FiActivity /> 2. Assets & Financials</h4>
+        <div className="resp-grid" style={formGrid}>
+          <InputField label="Monthly Income *" type="number" value={fieldForm.monthlyIncome} onChange={v => setFieldForm({...fieldForm, monthlyIncome: v})} />
+          <InputField label="Expenditure *" type="number" value={fieldForm.expenditure} onChange={v => setFieldForm({...fieldForm, expenditure: v})} />
+          <InputField label="Land Acres" type="number" value={fieldForm.landAcres} onChange={v => setFieldForm({...fieldForm, landAcres: v})} />
+          <InputField label="Networth (Total)" type="number" value={fieldForm.networth} onChange={v => setFieldForm({...fieldForm, networth: v})} />
+          <InputField label="No. of Cows" type="number" value={fieldForm.cows} onChange={v => setFieldForm({...fieldForm, cows: v})} />
+          <SelectField label="Occupation *" options={['SALARIED', 'SELF-EMPLOYED', 'AGRICULTURE', 'OTHERS']} value={fieldForm.memberOccupation} onChange={v => setFieldForm({...fieldForm, memberOccupation: v})} />
+        </div>
+      </div>
+    )}
+
+    {/* STEP 3: NOMINEE & BANKING */}
+    {step === 3 && (
+      <div className="animate-fade">
+        <h4 style={sectionTitle}><FiUsers /> 3. Nominee & Banking</h4>
+        <div className="resp-grid" style={formGrid}>
+          <InputField label="Nominee Name *" value={fieldForm.nomineeName} onChange={v => setFieldForm({...fieldForm, nomineeName: v})} />
+          <InputField label="Nominee Mobile *" type="number" value={fieldForm.nomineeMobile} onChange={v => setFieldForm({...fieldForm, nomineeMobile: v})} />
+          <InputField label="Nominee UID *" type="number" value={fieldForm.nomineeUID} onChange={v => setFieldForm({...fieldForm, nomineeUID: v})} />
+          <SelectField label="Relationship *" options={['SPOUSE', 'FATHER', 'MOTHER', 'SON', 'HUs', 'BROTHER']} value={fieldForm.nomineeRelation} onChange={v => setFieldForm({...fieldForm, nomineeRelation: v})} />
+          <InputField label="A/C Holder" value={fieldForm.accountHolderName} readOnly />
+          <InputField label="A/C Number" value={fieldForm.bankAccountNumber} readOnly />
+        </div>
+      </div>
+    )}
+
+    {/* STEP 4: DIGITAL EVIDENCE (KYC) */}
+    {step === 4 && (
+      <div className="animate-fade">
                     <h4 style={sectionTitle}><FiCamera /> 3. KYC Evidence</h4>
                     <div className="doc-resp-grid" style={docGrid}>
                         <CaptureBox label="Customer Photo *" field="custLivePhoto" value={fieldForm.custLivePhoto} onStartCamera={startCamera} />
@@ -244,26 +260,34 @@ const AdvisorVerification = () => {
                         <CaptureBox label="Passbook" field="passbookPic" value={fieldForm.passbookPic} onStartCamera={startCamera} />
                     </div>
                 </div>
-              )}
-              
-              <div style={footerAction}>
-                {step > 1 ? (
-                    <button type="button" onClick={prevStep} style={cancelBtn}>BACK</button>
-                ) : (
-                    <button type="button" onClick={() => setSelectedLoan(null)} style={cancelBtn}>CANCEL</button>
-                )}
 
-                {step < 3 ? (
-                    <button type="button" onClick={nextStep} style={submitBtn}>CONTINUE <FiArrowRight /></button>
-                ) : (
-                    <button type="button" onClick={handleSOPSubmit} disabled={loading} style={submitBtn}>
-                        {loading ? 'SYNCING...' : 'FINALIZE AUDIT'}
-                    </button>
-                )}
-              </div>
-            </div>
-          </div>
-        </div>
+    )}
+
+    {/* STEP 5: FINALIZATION */}
+    {step === 5 && (
+      <div className="animate-fade" style={{ textAlign: 'center', padding: '40px 0' }}>
+        <h4 style={sectionTitle}>Final Audit Check</h4>
+        <p style={{ color: '#64748b', marginBottom: '20px' }}>Data is ready to be synced with core banking.</p>
+        <button type="button" onClick={handleSOPSubmit} disabled={loading} style={submitBtn}>
+          {loading ? 'SYNCING...' : 'FINALIZE AUDIT & SUBMIT'}
+        </button>
+      </div>
+    )}
+
+    {/* Navigation */}
+    <div style={footerAction}>
+      {step > 1 ? (
+        <button type="button" onClick={prevStep} style={cancelBtn}>BACK</button>
+      ) : (
+        <button type="button" onClick={() => setSelectedLoan(null)} style={cancelBtn}>CANCEL</button>
+      )}
+
+      {step < 5 && (
+        <button type="button" onClick={nextStep} style={submitBtn}>CONTINUE <FiArrowRight /></button>
+      )}
+    </div>
+  </div>
+</div>
       )}
 
       {/* 🔥 OVERLAY MODEL FOR IN-BROWSER SECURE LIVE WEBCAM FEED */}

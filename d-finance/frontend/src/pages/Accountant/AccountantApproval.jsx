@@ -153,14 +153,23 @@ const AccountantApproval = () => {
 
               {/* On-Site Verification Insights */}
               <div style={sectionCard('#f8fafc', '#e2e8f0')}>
-                <h4 style={sectionTitle}><FiMapPin style={{color: '#d97706'}} /> FIELD VERIFICATION REPORT SUMMARY (LUC)</h4>
-                <div className="info-grid-resp" style={infoGrid}>
-                  <DataField label="Asset Household Structure" value={selectedLoan.houseType} />
-                  <DataField label="Evaluated Monthly Income" value={`₹${Number(selectedLoan.monthlyIncome || 0).toLocaleString('en-IN')}`} />
-                  <DataField label="Auditing Officer Signature Node" value={selectedLoan.verifiedByName} />
-                  <DataField label="Physical Infrastructure Coordinates" value={selectedLoan.locationName} />
-                </div>
-              </div>
+  <h4 style={sectionTitle}><FiMapPin style={{color: '#d97706'}} /> FIELD VERIFICATION REPORT SUMMARY</h4>
+  <div className="info-grid-resp" style={infoGrid}>
+    <DataField label="Members" value={selectedLoan.noOfMembers || 'N/A'} />
+    <DataField label="Earning Members" value={selectedLoan.earningMembers || 'N/A'} />
+    <DataField label="No. of Rooms" value={selectedLoan.noOfRooms || 'N/A'} />
+    <DataField label="House Stay (Yrs)" value={selectedLoan.houseStay || 'N/A'} />
+    <DataField label="House Type" value={selectedLoan.houseType} />
+    <DataField label="Water Source" value={selectedLoan.drinkingWater} />
+    <DataField label="Monthly Income" value={`₹${Number(selectedLoan.monthlyIncome || 0).toLocaleString('en-IN')}`} />
+    <DataField label="Expenditure" value={`₹${Number(selectedLoan.expenditure || 0).toLocaleString('en-IN')}`} />
+    <DataField label="Networth" value={`₹${Number(selectedLoan.networth || 0).toLocaleString('en-IN')}`} />
+    <DataField label="No. of Cows" value={selectedLoan.cows || 0} />
+    <DataField label="Occupation" value={selectedLoan.memberOccupation} />
+    <DataField label="Location/Area" value={`${selectedLoan.locationName || ''} / ${selectedLoan.areaType || ''}`} />
+    <DataField label="Auditor" value={selectedLoan.verifiedByName} />
+  </div>
+</div>
 
               {/* Bound Nominee Identity Framework */}
               <div style={sectionCard('#f8fafc', '#e2e8f0')}>

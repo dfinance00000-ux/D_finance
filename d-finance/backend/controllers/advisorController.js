@@ -3,7 +3,7 @@ const Loan = require('../models/Loan');
 // Advisor jab Field Verification & KYC submit karega
 exports.verifyField = async (req, res) => {
     try {
-        // 1. Saara data req.body se nikalna (Jo AdvisorVerification.jsx bhej raha hai)
+        // 1. Saara data req.body se extract karna
         const { 
             loanId, 
             religion, 
@@ -16,6 +16,15 @@ exports.verifyField = async (req, res) => {
             memberOccupation,
             incomeActivity,
             yearsAtCurrentAddress,
+            // Naye Audit Fields (Add kiye gaye hain)
+            noOfMembers,
+            earningMembers,
+            noOfRooms,
+            houseStay,
+            drinkingWater,
+            landAcres,
+            networth,
+            cows,
             // Nominee Details
             nomineeName,
             nomineeMobile,
@@ -30,6 +39,7 @@ exports.verifyField = async (req, res) => {
             secondaryIdFront,
             secondaryIdBack,
             memberSignature,
+            passbookPic,
             // System Fields
             locationName,
             verifiedByName,
@@ -52,6 +62,15 @@ exports.verifyField = async (req, res) => {
                     memberOccupation,
                     incomeActivity,
                     yearsAtCurrentAddress,
+                    // Save New Audit Fields
+                    noOfMembers,
+                    earningMembers,
+                    noOfRooms,
+                    houseStay,
+                    drinkingWater,
+                    landAcres,
+                    networth,
+                    cows,
                     // Nominee Data Save
                     nomineeName,
                     nomineeMobile,
@@ -61,15 +80,16 @@ exports.verifyField = async (req, res) => {
                     nomineePic,
                     // KYC Data Save
                     custLivePhoto,
-                    aadhaarFront,
-                    aadhaarBack,
+                    custAadhaarFront: aadhaarFront,
+                    custAadhaarBack: aadhaarBack,
                     secondaryIdFront,
                     secondaryIdBack,
-                    memberSignature,
+                    custSignature: memberSignature,
+                    passbookPic,
                     // Inspection Info
                     locationName,
                     verifiedByName,
-                    advisorId: advisorId || req.user.id, // Advisor ki ID attach karna
+                    advisorId: advisorId || req.user?.id, // Advisor ki ID attach karna
                     inspectionDate: new Date()
                 }
             },
@@ -80,7 +100,7 @@ exports.verifyField = async (req, res) => {
             return res.status(404).json({ success: false, error: "Loan Record Not Found!" });
         }
 
-        console.log(`✅ Loan ${loanId} verified by ${verifiedByName}`);
+        console.log(`✅ Loan ${loanId} audit finalized by ${verifiedByName}`);
 
         res.status(200).json({ 
             success: true,

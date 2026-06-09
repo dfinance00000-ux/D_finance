@@ -1,5 +1,6 @@
 {
   "dependencies": {
+    "@cashfreepayments/cashfree-js": "^1.0.7",
     "cashfree-pg": "^6.0.4"
   }
 }

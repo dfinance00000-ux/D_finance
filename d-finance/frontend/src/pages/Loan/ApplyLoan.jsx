@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
+
 import { useNavigate } from 'react-router-dom';
 import API from '../../api/axios'; 
 import { 
@@ -7,6 +8,9 @@ import {
 } from 'react-icons/fi';
 
 const ApplyLoan = () => {
+  const [cameraActive, setCameraActive] = useState(false);
+const videoRef = useRef(null);
+const streamRef = useRef(null);
   const user = JSON.parse(localStorage.getItem('user') || '{}');
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
@@ -96,14 +100,61 @@ const ApplyLoan = () => {
     );
   };
 
-  const handleImageChange = (e) => {
-    const file = e.target.files[0];
-    if (file) {
-      const reader = new FileReader();
-      reader.onloadend = () => setFormData(prev => ({ ...prev, passbookPic: reader.result }));
-      reader.readAsDataURL(file);
-    }
-  };
+  const startCamera = async () => {
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({
+      video: {
+        facingMode: { ideal: "environment" }
+      },
+      audio: false
+    });
+
+    streamRef.current = stream;
+    setCameraActive(true);
+
+    setTimeout(() => {
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream;
+      }
+    }, 100);
+
+  } catch (err) {
+    alert("Camera access denied");
+  }
+};
+
+const stopCamera = () => {
+  if (streamRef.current) {
+    streamRef.current.getTracks().forEach(track => track.stop());
+  }
+  setCameraActive(false);
+};
+
+const capturePhoto = () => {
+  const canvas = document.createElement("canvas");
+
+  canvas.width = videoRef.current.videoWidth;
+  canvas.height = videoRef.current.videoHeight;
+
+  const ctx = canvas.getContext("2d");
+
+  ctx.drawImage(
+    videoRef.current,
+    0,
+    0,
+    canvas.width,
+    canvas.height
+  );
+
+  const image = canvas.toDataURL("image/jpeg");
+
+  setFormData(prev => ({
+    ...prev,
+    passbookPic: image
+  }));
+
+  stopCamera();
+};
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -206,17 +257,17 @@ const ApplyLoan = () => {
                 <label className="field-label">Account Holder Name</label>
                 <div className="input-with-icon">
                   <FiUser className="icon-main" />
-                  <input className="premium-input" placeholder="Legal name as per bank records" required value={formData.accountHolderName} 
+                  <input className="premium-input" placeholder="" required value={formData.accountHolderName} 
                     onChange={e => setFormData({...formData, accountHolderName: e.target.value})} />
                 </div>
               </div>
 
               <div className="input-grid">
                 <div className="field-box">
-                  <label className="field-label">Full Bank Name</label>
+                  <label className="field-label">Bank Name</label>
                   <div className="input-with-icon">
                     <FiHome className="icon-main" />
-                    <input className="premium-input" placeholder="e.g. HDFC Bank Ltd" required value={formData.bankName} 
+                    <input className="premium-input" placeholder="" required value={formData.bankName} 
                       onChange={e => setFormData({...formData, bankName: e.target.value})} />
                   </div>
                 </div>
@@ -224,7 +275,7 @@ const ApplyLoan = () => {
                   <label className="field-label">Branch & Location</label>
                   <div className="input-with-icon">
                     <FiMapPin className="icon-main" />
-                    <input className="premium-input" placeholder="e.g. Krishna Nagar, Mathura" required value={formData.branchName} 
+                    <input className="premium-input" placeholder="" required value={formData.branchName} 
                       onChange={e => setFormData({...formData, branchName: e.target.value})} />
                   </div>
                 </div>
@@ -240,7 +291,7 @@ const ApplyLoan = () => {
                   </div>
                 </div>
                 <div className="field-box">
-                  <label className="field-label">Primary Account Number</label>
+                  <label className="field-label">Account Number</label>
                   <div className="input-with-icon">
                     <FiCreditCard className="icon-main" />
                     <input type="password" className="premium-input" placeholder="Enter bank account number" required value={formData.accountNumber} 
@@ -280,28 +331,111 @@ const ApplyLoan = () => {
           </div>
 
           {/* Section 4: Digital Evidence */}
-          <div className="form-section">
-            <h3 className="section-heading">04. Digital Evidence (KYC)</h3>
-            <div className="evidence-vault">
-              <label className="upload-trigger">
-                <FiCamera size={24} />
-                <span>Capture Bank Passbook / Cancelled Cheque</span>
-                <input type="file" accept="image/*" onChange={handleImageChange} hidden />
-              </label>
-              {formData.passbookPic && (
-                <div className="preview-container">
-                  <img src={formData.passbookPic} className="image-preview" alt="Document Preview" />
-                  <div className="success-badge">Document Uploaded</div>
-                </div>
-              )}
-            </div>
-          </div>
+  <div className="form-section">
+  <h3 className="section-heading">04. Digital Evidence (KYC)</h3>
 
+  <div className="evidence-vault">
+
+    <button
+      type="button"
+      onClick={startCamera}
+      className="location-fetch-btn"
+    >
+      <FiCamera />
+      Open Camera
+    </button>
+
+    {!formData.passbookPic && (
+      <div
+        style={{
+          marginTop: "15px",
+          color: "#64748b",
+          fontSize: "13px",
+          fontWeight: "600"
+        }}
+      >
+        Add Passbook or Cancelled Cheque
+      </div>
+    )}
+
+    {formData.passbookPic && (
+      <div className="preview-container">
+        <img
+          src={formData.passbookPic}
+          className="image-preview"
+          alt="Document Preview"
+        />
+        <div className="success-badge">
+          Document Uploaded
+        </div>
+      </div>
+    )}
+
+  </div>
+</div>
+{cameraActive && (
+  <div
+    style={{
+      position: "fixed",
+      inset: 0,
+      background: "rgba(0,0,0,.9)",
+      zIndex: 9999,
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center"
+    }}
+  >
+    <div
+      style={{
+        background: "#fff",
+        padding: 20,
+        borderRadius: 20,
+        width: "90%",
+        maxWidth: 500
+      }}
+    >
+      <video
+        ref={videoRef}
+        autoPlay
+        playsInline
+        style={{
+          width: "100%",
+          borderRadius: 12
+        }}
+      />
+
+      <div
+        style={{
+          display: "flex",
+          gap: 10,
+          marginTop: 15
+        }}
+      >
+        <button
+          type="button"
+          onClick={capturePhoto}
+          className="location-fetch-btn"
+        >
+          Capture
+        </button>
+
+        <button
+          type="button"
+          onClick={stopCamera}
+          className="master-submit-btn"
+        >
+          Close
+        </button>
+      </div>
+    </div>
+  </div>
+)}
           <button type="submit" disabled={loading} className="master-submit-btn">
             {loading ? "Authenticating Request..." : "Finalize Application & Submit"}
           </button>
         </form>
       </div>
+      
 
       {/* Sticky Financial Sidebar Container */}
       <aside className="financial-terminal">
@@ -396,6 +530,11 @@ const professionalStyles = `
   .master-submit-btn { width: 100%; padding: 20px; background: #0f172a; color: #fff; border: none; border-radius: 16px; font-weight: 900; cursor: pointer; font-size: 15px; transition: 0.3s; margin-top: 10px; box-sizing: border-box; }
   .master-submit-btn:hover { background: #6366f1; transform: translateY(-2px); }
   
+  .evidence-vault {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
   /* Sidebar Container */
   .financial-terminal { flex: 0 0 360px; min-width: 0; }
   .terminal-sticky { position: sticky; top: 40px; }
@@ -429,6 +568,19 @@ const professionalStyles = `
     .terminal-sticky { position: static; }
   }
 
+  .premium-input,
+.premium-input.plain {
+  border: 2px solid #4b5563; /* Dark Gray */
+  background: #fff;
+  color: #111827;
+}
+
+.premium-input:focus,
+.premium-input.plain:focus {
+  border-color: #1f2937; /* Aur dark on focus */
+  box-shadow: 0 0 0 3px rgba(31, 41, 55, 0.15);
+  outline: none;
+}
   @media (max-width: 576px) {
     .portal-container { padding: 10px; }
     .terminal-header { flex-direction: column; align-items: flex-start; gap: 15px; padding: 25px 20px; }

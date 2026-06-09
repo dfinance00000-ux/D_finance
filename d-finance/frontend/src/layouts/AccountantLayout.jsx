@@ -119,7 +119,7 @@ const AccountantLayout = () => {
             </div>
             <div>
               <h3 style={headerUserText}>Hi, {user?.fullName?.split(' ')[0]}</h3>
-              <small style={headerSubText} className="hide-mobile">Mathura Branch | Finance Head</small>
+              <small style={headerSubText} className="hide-mobile">Prayagraj Branch | Finance Head</small>
             </div>
           </div>
 
@@ -133,7 +133,7 @@ const AccountantLayout = () => {
         </main>
 
         <footer style={footerStyle}>
-          © 2026 D-Finance Ledger | Mathura Branch
+          © 2026 D-Finance Ledger | Prayagraj Branch
         </footer>
       </div>
     </div>

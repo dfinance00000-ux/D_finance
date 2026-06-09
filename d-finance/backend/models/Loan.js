@@ -10,6 +10,16 @@ const LoanSchema = new mongoose.Schema({
   paymentOrderId: {
     type: String
   },
+  cashfreeOrderId: {
+  type: String,
+  default: ""
+},
+
+paymentStatus: {
+  type: String,
+  enum: ["PENDING", "PAID", "FAILED"],
+  default: "PENDING"
+},
   customerId: { 
     type: mongoose.Schema.Types.ObjectId, 
     ref: 'User', 
@@ -94,6 +104,14 @@ const LoanSchema = new mongoose.Schema({
   totalFamilyMembers: { type: String },
   earningMembers: { type: String },
   
+  noOfMembers: { type: String },       // No. of Members
+  earningMembers: { type: String },    // Earning Members
+  noOfRooms: { type: String },         // No. of Rooms
+  houseStay: { type: String },         // Stay Duration
+  drinkingWater: { type: String },     // Water Source
+  landAcres: { type: String },         // Land Acres
+  networth: { type: String },          // Networth
+  cows: { type: String },
   // --- 💼 OCCUPATION & ECONOMY ---
   memberOccupation: { type: String },
   subOccupation: { type: String },

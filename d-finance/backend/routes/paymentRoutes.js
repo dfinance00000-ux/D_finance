@@ -1,33 +1,28 @@
-const express = require('express');
+const express = require("express");
 const router = express.Router();
-const paymentController = require('../controllers/paymentController');
-const { protect } = require('../middlewares/authMiddleware');
 
-// --- 💳 PAYMENT ROUTES (D-FINANCE BACKEND) ---
+const {
+  createPaymentSession,
+  getPaymentStatus
+} = require("../controllers/cashfreeController");
 
-/**
- * 1. Create Order
- * Path: /api/payments/create-order
- */
-router.post('/create-order', protect, paymentController.createOrder);
+const {
+  cashfreeWebhookReceiver
+} = require("../controllers/webhookController");
 
-/**
- * 2. Verify Payment (Manual Verification Backup)
- * Path: /api/payments/verify
- */
-router.post('/verify', protect, paymentController.verifyAndSavePayment);
+router.post(
+  "/create-order",
+  createPaymentSession
+);
 
-/**
- * 3. 🔥 WEBHOOK (Automation Heart)
- * Path: /api/payments/webhook
- * 🚨 CRITICAL: 'protect' middleware hata diya hai taaki 401 error na aaye!
- */
-router.post('/webhook', paymentController.handleWebhook);
+router.get(
+  "/status/:orderId",
+  getPaymentStatus
+);
 
-/**
- * 4. NEW: Manual Payment Receipt Submission
- * Path: /api/payments/pay-manual/:loanId
- */
-router.post('/pay-manual/:loanId', protect, paymentController.payManual);
+router.post(
+  "/webhook/cashfree",
+  cashfreeWebhookReceiver
+);
 
 module.exports = router;

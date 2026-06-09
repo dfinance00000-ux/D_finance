@@ -119,7 +119,7 @@ const CustomerLayout = () => {
         </main>
 
         <footer className="p-6 text-center text-[9px] lg:text-[11px] font-bold text-slate-300 uppercase tracking-[0.2em] leading-loose">
-          D-Finance Mathura • Secured Transaction Node • 2026
+          D-Finance • Secured Transaction Node • 2026
         </footer>
       </div>
 

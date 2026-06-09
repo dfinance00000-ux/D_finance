@@ -16,26 +16,26 @@ const AdminApproval = () => {
   const currentUser = JSON.parse(localStorage.getItem('user')) || {};
 
   const fetchData = useCallback(async () => {
-    try {
-      setLoading(true);
-      const [loansRes, usersRes] = await Promise.all([
-        API.get('/admin/all-loans').catch(() => ({ data: [] })),
-        API.get('/admin/all-users-absolute').catch(() => ({ data: [] })) 
-      ]);
+  try {
+    setLoading(true);
+    const [loansRes, usersRes] = await Promise.all([
+      API.get('/admin/all-loans').catch(() => ({ data: [] })),
+      API.get('/admin/all-users-absolute').catch(() => ({ data: [] })) 
+    ]);
 
-      // ✅ FIX: Filter ko thoda relax kiya hai taaki loans dikhne lagein
-      // Agar status 'Disbursed' nahi hai, toh wo approval queue mein dikhega
-      const pending = loansRes.data.filter(loan => loan.status !== 'Disbursed');
-      
-      setLoans(pending.reverse());
-      setAllUsers(usersRes.data || []);
-      console.log("Total Loans in State:", pending.length);
-    } catch (err) {
-      console.error("Atlas Sync Error:", err);
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+    // ✅ FIX: Sirf wahi loans dikhao jo na 'Disbursed' hain aur na hi 'Accountant Approved'
+    const pending = loansRes.data.filter(loan => 
+      loan.status !== 'Disbursed' && loan.status !== 'Accountant Approved'
+    );
+    
+    setLoans(pending.reverse());
+    setAllUsers(usersRes.data || []);
+  } catch (err) {
+    console.error("Sync Error:", err);
+  } finally {
+    setLoading(false);
+  }
+}, []);
 
   useEffect(() => { fetchData(); }, [fetchData]);
 
@@ -136,24 +136,29 @@ const AdminApproval = () => {
           })}
 
           {/* --- VIEW 2: LOAN QUEUE --- */}
-          {!masterMode && loans.length > 0 ? loans.map((loan) => (
-            <div key={loan._id} style={cardStyle}>
-              <div style={cardHeader}>
-                <span style={idBadge}>ID: {loan.loanId}</span>
-                <span style={statusBadge(loan.status)}>{loan.status}</span>
-              </div>
-              <h3 style={nameStyle}>{loan.customerName}</h3>
-              <div style={infoRow}>
-                <div><label style={labelStyle}>PRINCIPAL</label><p style={valStyle}>₹{loan.amount}</p></div>
-                <div style={{textAlign: 'right'}}><label style={labelStyle}>PAYOUT</label><p style={{...valStyle, color: '#059669'}}>₹{loan.netDisbursed}</p></div>
-              </div>
-              <div style={miniStatsRow}>
-                  <span>EMI: ₹{loan.weeklyEMI}</span>
-                  <span>Weeks: {loan.totalWeeks}</span>
-              </div>
-              <button onClick={() => handleApprove(loan)} style={approveBtn}>Disburse Now</button>
-            </div>
-          )) : !masterMode && <div style={emptyStyle}>No active loans found in queue.</div>}
+         {/* --- VIEW 2: LOAN QUEUE --- */}
+{!masterMode && loans.length > 0 ? loans.map((loan) => (
+  <div key={loan._id} style={cardStyle}>
+    <div style={cardHeader}>
+      <span style={idBadge}>ID: {loan.loanId}</span>
+      <span style={statusBadge(loan.status)}>{loan.status}</span>
+    </div>
+    <h3 style={nameStyle}>{loan.customerName}</h3>
+    <div style={infoRow}>
+      <div><label style={labelStyle}>PRINCIPAL</label><p style={valStyle}>₹{loan.amount}</p></div>
+      <div style={{textAlign: 'right'}}><label style={labelStyle}>PAYOUT</label><p style={{...valStyle, color: '#059669'}}>₹{loan.netDisbursed}</p></div>
+    </div>
+    
+    {/* ✅ Conditional Rendering: Agar Accountant Approved hai toh text dikhao, warna button */}
+    {loan.status === 'Accountant Approved' ? (
+      <div style={{textAlign: 'center', padding: '15px', background: '#e0f2fe', color: '#0369a1', borderRadius: '15px', fontWeight: '900'}}>
+        ACCOUNTANT APPROVED
+      </div>
+    ) : (
+      <button onClick={() => handleApprove(loan)} style={approveBtn}>Disburse Now</button>
+    )}
+  </div>
+)) : !masterMode && <div style={emptyStyle}>No active loans found in queue.</div>}
         </div>
       )}
 

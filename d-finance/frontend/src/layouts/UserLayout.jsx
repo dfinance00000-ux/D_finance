@@ -140,7 +140,7 @@ const UserLayout = () => {
         </main>
 
         <footer className="h-10 bg-white border-t border-slate-100 px-6 lg:px-12 flex items-center justify-between text-[8px] lg:text-[9px] font-black text-slate-300 tracking-[0.2em] uppercase">
-          <div className="truncate mr-4">D-Finance Mathura Branch • 2026</div>
+          <div className="truncate mr-4">D-Finance • 2026</div>
           <div className="flex gap-4 shrink-0">
              <span className="hidden sm:inline">LUC v2.4</span>
              <span className="text-emerald-400">● Encrypted</span>

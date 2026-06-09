@@ -48,6 +48,7 @@ import LoanTracking from "../pages/Customer/LoanTracking";
 import EMIPayments from "../pages/Customer/EMIPayments";
 import PaymentHistory from '../pages/Customer/PaymentHistory';
 import BlogsPage from '../pages/BlogsPage';
+import PaymentSuccess from '../pages/Payment/PaymentSuccess';
 // ... Routes ke andar
 
 const AppRoutes = () => {
@@ -111,6 +112,10 @@ const AppRoutes = () => {
         <Route path="/customer/payment-history" element={<PaymentHistory />} />
       </Route>
 
+<Route
+  path="/payment-success"
+  element={<PaymentSuccess />}
+/>
       {/* 7. Error 404 */}
       <Route path="*" element={
         <div className="h-screen flex flex-col items-center justify-center font-bold text-2xl text-red-500 bg-gray-100">
