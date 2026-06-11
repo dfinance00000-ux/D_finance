@@ -6,8 +6,10 @@ import {
   FiClock, FiCheckCircle, FiAlertCircle, FiActivity, 
   FiCreditCard, FiHash, FiInfo, FiArrowRight, FiXCircle 
 } from 'react-icons/fi';
+// import { useSearchParams } from "react-router-dom";
 
 const CustomerDashboard = () => {
+  
   const [loans, setLoans] = useState([]);
   const [payments, setPayments] = useState([]);
   const [loading, setLoading] = useState(true);

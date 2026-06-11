@@ -52,7 +52,8 @@ const PaymentSchema = new mongoose.Schema(
 
     utr: {
       type: String,
-      trim: true
+      trim: true,
+      sparse: true
     },
 
     screenshot: {
@@ -118,9 +119,9 @@ PaymentSchema.index({
   createdAt: -1
 });
 
-PaymentSchema.index({
-  orderId: 1
-});
+// PaymentSchema.index({
+//   orderId: 1
+// });
 
 module.exports =
   mongoose.models.Payment ||

@@ -28,17 +28,14 @@ console.log("✅ Payment Routes Loaded");
 
 // ====================================
 // CASHFREE
-// ====================================
+
 const { Cashfree } = require("cashfree-pg");
 
-Cashfree.XClientId =
-  process.env.CASHFREE_APP_ID;
+Cashfree.XClientId = process.env.CASHFREE_APP_ID;
+Cashfree.XClientSecret = process.env.CASHFREE_SECRET_KEY;
 
-Cashfree.XClientSecret =
-  process.env.CASHFREE_SECRET_KEY;
-
-Cashfree.XEnvironment = "PRODUCTION";
-
+// 🔥 FIX: Object property ki jagah direct string daal do
+Cashfree.XEnvironment = "SANDBOX";
 // ====================================
 // MODELS
 // ====================================
@@ -60,7 +57,6 @@ connectDB();
 // ====================================
 // MIDDLEWARES
 // ====================================
-
 app.use(cors({
   origin: [
     "http://localhost:5173",
@@ -69,42 +65,23 @@ app.use(cors({
     "https://www.dfinance.space"
   ],
   credentials: true,
-  methods: [
-    "GET",
-    "POST",
-    "PUT",
-    "PATCH",
-    "DELETE",
-    "OPTIONS"
-  ]
+  methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"]
 }));
 
-app.use(express.json({
-  limit: "50mb"
-}));
-
-app.use(express.urlencoded({
-  extended: true,
-  limit: "50mb"
-}));
+app.use(express.json({ limit: "50mb" }));
+app.use(express.urlencoded({ extended: true, limit: "50mb" }));
 
 // ====================================
-// ROUTES
+// ROUTES REGISTER
 // ====================================
+app.use("/api/payments", paymentRoutes);
+app.use("/api/admin", adminRoutes);
 
-app.use(
-  "/api/payments",
-  paymentRoutes
-);
+console.log("✅ Server configuration initialized successfully");
 
-app.use(
-  "/api/admin",
-  adminRoutes
-);
-
-console.log(
-  "✅ Server configuration initialized successfully"
-);
+// ====================================
+// 🔥 FIXED: START SERVER PORT LISTENING ENGINE
+// ====================================
 // --- 2. AUTH MIDDLEWARE ---
 const verifyToken = (req, res, next) => {
     const token = req.headers['authorization']?.split(' ')[1];

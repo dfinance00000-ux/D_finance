@@ -1,12 +1,12 @@
 import axios from 'axios';
 
 // 🧭 AUTOMATIC ENVIRONMENT DETECTION ENGINE
+// api/axios.js mein baseURL ko is tarah update karo:
 const isLocal = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
 
 const API = axios.create({
-  // 🔥 AUTO-SWITCH MATRIX: Ab aapko baar-baar comment/uncomment nahi karna padega
-  baseURL: 'https://dfinance.space/api',
-  // baseURL: 'https://d-finance-backend.onrender.com/api',
+  // 🔥 AUTO-SWITCH MATRIX ACTIVATE: Localhost par local port chalega, prod par live URL
+  baseURL: isLocal ? 'http://localhost:5000/api' : 'https://dfinance.space/api', // 5000 ko apne local backend port se replace kar lena agar alag hai
   withCredentials: true,
   timeout: 60000,
 });
@@ -14,7 +14,23 @@ const API = axios.create({
 // ⏳ Request Interceptor: Injecting bearer token to outgoing network pipelines
 API.interceptors.request.use(
   (config) => {
-    const token = localStorage.getItem('token');
+    // 1. Pehle direct 'token' check karo
+    let token = localStorage.getItem('token');
+    
+    // 2. Agar direct nahi mila, toh 'user' object ke andar check karo
+    if (!token) {
+      const userStr = localStorage.getItem('user');
+      if (userStr) {
+        try {
+          const userObj = JSON.parse(userStr);
+          token = userObj.token; // User object se token nikal liya
+        } catch (e) {
+          console.error("Local storage parsing error", e);
+        }
+      }
+    }
+
+    // 3. Agar token mil gaya, toh Header mein attach kar do
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
@@ -30,25 +46,21 @@ API.interceptors.response.use(
     return response;
   },
   (error) => {
-    // Structural normalization layer tracking
     const errorData = error.response?.data;
     console.error(`❌ API Error [${error.config?.url}]:`, errorData || error.message);
 
-    // 🚀 BYPASS RECONCILE: Agar error 401 (Unauthorized) hai LEKIN ye KYC ya Login/Signup route hai, toh logout MAT KARO
     const isAuthRoute = error.config?.url?.includes('/auth/') || error.config?.url?.includes('/kyc/');
 
     if (error.response && error.response.status === 401 && !isAuthRoute) {
-      console.warn("🛡️ Session expired or token cluster validation failed. Logging out...");
+      console.warn("🛡️ Session expired. Logging out...");
       localStorage.clear();
       if (window.location.pathname !== '/login') {
         window.location.href = '/login';
       }
     }
     
-    // 🔥 SAFE REJECTION HOOK: Backend ka asli object ya message pass karo taaki runtime context break na ho
-    // Agar backend se poora HTML content (jaise 404 text) mil raha hai, toh use object format me wrap kar diya hai
     if (typeof errorData === 'string' && errorData.includes('<!DOCTYPE html>')) {
-      return Promise.reject({ error: "Route validation endpoint missing. Please verify server routes register code map." });
+      return Promise.reject({ error: "Route validation endpoint missing." });
     }
 
     return Promise.reject(errorData || { error: error.message || "Connection Error" });

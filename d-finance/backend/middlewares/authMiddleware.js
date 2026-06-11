@@ -14,7 +14,8 @@ const verifyToken = (req, res, next) => {
 };
 
 const isAdmin = (req, res, next) => {
-    if (req.user && req.user.role === 'admin') {
+    // 🔥 FIX: .toLowerCase() add kiya taaki Case-Sensitivity ka lafda khatam ho jaye
+    if (req.user && req.user.role && req.user.role.toLowerCase() === 'admin') {
         next();
     } else {
         res.status(403).json({ message: "Access denied. Admins only." });
