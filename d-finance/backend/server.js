@@ -35,7 +35,7 @@ Cashfree.XClientId = process.env.CASHFREE_APP_ID;
 Cashfree.XClientSecret = process.env.CASHFREE_SECRET_KEY;
 
 // 🔥 FIX: Object property ki jagah direct string daal do
-Cashfree.XEnvironment = "SANDBOX";
+Cashfree.XEnvironment = "PRODUCTION";
 // ====================================
 // MODELS
 // ====================================
