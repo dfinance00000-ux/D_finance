@@ -8,15 +8,14 @@ import {
 } from "react-icons/fi";
 
 const PaymentModal = ({ loan, onClose }) => {
-  console.log("🔥 MY LOAN OBJECT DATA:", loan);
   const [loading, setLoading] = useState(false);
-  
 
   const handleCashfreePayment = async () => {
     setLoading(true);
 
     try {
       // 1. Backend API se checkout order session create karo
+      // Backend internally Loan Schema se verified details automap kar lega
       const { data } = await API.post("/payments/create-order", {
         loanId: loan.loanId,
         amount: loan.installmentAmount,
@@ -25,7 +24,7 @@ const PaymentModal = ({ loan, onClose }) => {
           loan.customerId || 
           loan.loanId,
         
-        // 🔥 Real mobile number extraction fallback engine
+        // Real mobile number extraction fallback engine
         customer_phone:
           loan.customerMobile ||
           loan.customerPhone ||
@@ -40,23 +39,17 @@ const PaymentModal = ({ loan, onClose }) => {
         throw new Error("Payment Session ID not received from backend cluster.");
       }
 
-      // 2. Environment Detect karke sahi Cashfree Mode load karo
-      // Vite production build me automatic 'production' select hoga, local par 'sandbox'
-      const isProduction = import.meta.env.PROD || import.meta.env.MODE === "production";
-      
-      // const cashfree = await load({
-      //   mode: isProduction ? "production" : "sandbox",
-      // });
+      // 2. Cashfree SDK Sandbox Initialization (Forced for test keys consistency on production)
       const cashfree = await load({
         mode: "sandbox", 
-});
+      });
 
-      console.log(`🚀 Cashfree SDK Initialized in [${isProduction ? "PRODUCTION" : "SANDBOX"}] mode`);
+      console.log("🚀 Cashfree SDK safely initialized in [SANDBOX] mode for staging tracking");
 
       // 3. Checkout interface launch karo (Same window redirection flow)
       await cashfree.checkout({
         paymentSessionId: data.payment_session_id,
-        redirectTarget: "_self", // Dashboard par safe parameter return ke liye
+        redirectTarget: "_self", // Redirects back gracefully to customer dashboard query strings
       });
 
     } catch (err) {
