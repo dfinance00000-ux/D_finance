@@ -12,24 +12,27 @@ const { verifyToken } = require("../middlewares/authMiddleware");
 // Controller
 const loanController = require("../controllers/loanController");
 
-// 🔥 DYNAMIC ROLE CHECKER ENGINE (Case-Insensitivity Protected)
+// 🔥 SMART ROLE CHECKER ENGINE (Bypasses spaces and case-sensitivity)
 const allowRoles = (...allowedRoles) => {
   return (req, res, next) => {
     if (req.user && req.user.role) {
-      const userRole = req.user.role.toLowerCase();
-      // Safe matching for both 'Admin'/'admin' and 'Accountant'/'accountant'
-      if (allowedRoles.map(r => r.toLowerCase()).includes(userRole)) {
+      const userRole = req.user.role.toLowerCase().trim();
+      const cleanAllowed = allowedRoles.map(r => r.toLowerCase().trim());
+
+      if (cleanAllowed.includes(userRole)) {
         return next();
       }
     }
-    return res.status(403).json({ message: "Access denied. Unauthorized role restriction." });
+    return res.status(403).json({ 
+      message: `Access denied. Unauthorized role restriction. Detected Role: "${req.user?.role || 'Unknown'}"` 
+    });
   };
 };
 
 // =====================================
-// DASHBOARD STATS (Allowed for Admin & Accountant)
+// DASHBOARD STATS (Allowed for Admin, Accountant, Officer, Advisor & User)
 // =====================================
-router.get("/stats", verifyToken, allowRoles("admin", "accountant"), async (req, res) => {
+router.get("/stats", verifyToken, allowRoles("admin", "accountant", "officer", "field officer", "fieldofficer", "advisor", "user"), async (req, res) => {
   try {
     const loans = await Loan.find();
     const customerCount = await User.countDocuments({ role: "user" });
@@ -67,9 +70,9 @@ router.post("/approve-payment/:id", verifyToken, allowRoles("admin", "accountant
 router.delete("/reject-payment/:id", verifyToken, allowRoles("admin", "accountant"), loanController.rejectPayment);
 
 // =====================================
-// CUSTOMER MANAGEMENT (Allowed for Admin & Accountant)
+// CUSTOMER MANAGEMENT (Allowed for Admin, Accountant, Officer, Advisor & User)
 // =====================================
-router.get("/all-customers", verifyToken, allowRoles("admin", "accountant"), async (req, res) => {
+router.get("/all-customers", verifyToken, allowRoles("admin", "accountant", "officer", "field officer", "fieldofficer", "advisor", "user"), async (req, res) => {
   try {
     const customers = await User.find({ role: "user" }).select("-password").sort({ createdAt: -1 });
     res.json(customers);
@@ -91,9 +94,9 @@ router.get("/all-staff", verifyToken, allowRoles("admin", "accountant"), async (
 });
 
 // =====================================
-// LOAN MANAGEMENT (Allowed for Admin & Accountant)
+// LOAN MANAGEMENT (Allowed for Admin, Accountant, Officer, Advisor & User)
 // =====================================
-router.get("/all-loans", verifyToken, allowRoles("admin", "accountant"), async (req, res) => {
+router.get("/all-loans", verifyToken, allowRoles("admin", "accountant", "officer", "field officer", "fieldofficer", "advisor", "user"), async (req, res) => {
   try {
     const loans = await Loan.find().sort({ createdAt: -1 });
     res.json(loans);
